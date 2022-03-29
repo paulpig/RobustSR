@@ -1,5 +1,6 @@
-from random import random
+from random import random, shuffle
 from util.io import FileIO
+import pdb
 class DataSplit(object):
 
     def __init__(self):
@@ -9,6 +10,7 @@ class DataSplit(object):
     def dataSplit(data,test_ratio = 0.3,output=False,path='./',order=1,binarized = False):
         if test_ratio>=1 or test_ratio <=0:
             test_ratio = 0.3
+        # pdb.set_trace()
         testSet = []
         trainingSet = []
         for entry in data:
@@ -27,6 +29,11 @@ class DataSplit(object):
 
     @staticmethod
     def crossValidation(data,k,output=False,path='./',order=1,binarized=False):
+        """
+        no shuffle, add shuffle
+        """
+        # add shuffle
+        # data = shuffle(data)
         if k<=1 or k>10:
             k=3
         for i in range(k):

@@ -68,7 +68,11 @@ class QRec(object):
             binarized = False
             if self.evaluation.contains('-b'):
                 binarized = True
+            
+            # shuffle trainingData
+            # shuffle(self.trainingData)
             for train,test in DataSplit.crossValidation(self.trainingData,k,binarized=binarized):
+                # pdb.set_trace()
                 fold = '['+str(i)+']'
                 if self.config.contains('social'):
                     recommender = self.config['model.name'] + "(self.config,train,test,self.relation,fold)"
@@ -88,6 +92,7 @@ class QRec(object):
                 for p in tasks:
                     p.join()
             #compute the average error of k-fold cross validation
+            # pdb.set_trace()
             self.measure = [dict(mDict)[i] for i in range(1,k+1)]
             res = []
             for i in range(len(self.measure[0])):

@@ -1,5 +1,7 @@
 from cProfile import label
 from re import T
+
+from urllib3 import add_stderr_logger
 from base.graphRecommender import GraphRecommender
 from base.socialRecommender import SocialRecommender
 import tensorflow as tf
@@ -19,14 +21,14 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 We have transplated QRec from py2 to py3. But we found that, with py3, SEPT achieves higher NDCG
 but lower (slightly) Prec and Recall compared with the results reported in the paper.
 '''
-class SEPT(SocialRecommender, GraphRecommender):
+class SEPTV2(SocialRecommender, GraphRecommender):
     def __init__(self, conf, trainingSet=None, testSet=None, relation=None, fold='[1]'):
         GraphRecommender.__init__(self, conf=conf, trainingSet=trainingSet, testSet=testSet, fold=fold)
         SocialRecommender.__init__(self, conf=conf, trainingSet=trainingSet, testSet=testSet, relation=relation,fold=fold)
 
     def readConfiguration(self):
-        super(SEPT, self).readConfiguration()
-        args = config.OptionConf(self.config['SEPT'])
+        super(SEPTV2, self).readConfiguration()
+        args = config.OptionConf(self.config['SEPTV2'])
         self.n_layers = int(args['-n_layer'])
         self.ss_rate = float(args['-ss_rate'])
         self.drop_rate = float(args['-drop_rate'])
@@ -39,6 +41,7 @@ class SEPT(SocialRecommender, GraphRecommender):
         self.rec_ppr_aug_w = float(args['-rec_ppr_aug_w'])
         self.inter_ppr_w = float(args['-inter_ppr_w'])
         self.graph_label_w = float(args['-graph_label_w'])
+        self.cluster_type = int(args['-cluster_type']) 
         # pdb.set_trace()
 
 
@@ -359,7 +362,8 @@ class SEPT(SocialRecommender, GraphRecommender):
         # user_embeddings = tf.nn.embedding_lookup(userEmbedding, tf.unique(self.u_idx)[0])
         # user_embeddings = tf.nn.l2_normalize(user_embeddings, axis=1) #(user_num, dim)
 
-        sample_prob = self.social_ppr_mat + -1e5 * tf.eye(self.num_users)
+        # sample_prob = self.social_ppr_mat + -1e5 * tf.eye(self.num_users)
+        sample_prob = self.social_ppr_mat
         # sample_prob = self.social_ppr_mat
         sample_prob = tf.nn.softmax(sample_prob)
         # topKUsers = t.multinomial(sample_prob, top_k) #(user_num, topk)
@@ -368,6 +372,136 @@ class SEPT(SocialRecommender, GraphRecommender):
         topKuserEmbs = tf.nn.embedding_lookup(userEmbedding, indices)
         # topKuserEmbs = userEmbedding[topKUsers] #(user_num, topk, dim)
         return tf.reduce_sum(topKuserEmbs, axis=1) #(user_num, dim)
+    
+
+    def sampleTopkUsersKeepOri(self, userEmbedding, top_k=10, social_ppr_mat=None, mask_ori=False, add_norm=True, add_self=True, social_layer_num=1):
+        """
+        self.bs_matrix: csr mat
+        social_ppr_mat: array
+        return 
+            (user_num, dim)
+        """
+        # mask eye
+        # user_embeddings = tf.nn.embedding_lookup(userEmbedding, tf.unique(self.u_idx)[0])
+        # user_embeddings = tf.nn.l2_normalize(user_embeddings, axis=1) #(user_num, dim)
+        # social_mat = self._convert_sp_mat_to_sp_tensor(self.bs_matrix)
+        # social_mat = tf.sparse.to_dense(social_mat) 
+        # pdb.set_trace()
+        # sample_prob = tf.multiply(self.social_ppr_mat, tf.sparse.to_dense(social_mat))
+        
+        bs_matrix = self.bs_matrix.toarray()
+        # extract from the ppr mat
+        # indices = tf.math.top_k(social_ppr_mat , top_k)[1]
+
+        # ii, _ = tf.meshgrid(tf.range(self.num_users), tf.range(top_k), indexing='ij')
+        # full_indices = tf.reshape(tf.stack([ii, indices], axis=-1), [-1, len(self.social_ppr_mat.shape)])
+
+        # tensor = tf.zeros_like(social_mat, dtype=tf.float32)
+        # updates = tf.ones(full_indices.shape[0])
+        # ppr_mask_mat = tf.tensor_scatter_update(tensor, full_indices, updates)
+
+        # extract from the ppr mat
+        # social_ppr_mat = social_ppr_mat.toarray()
+        indices = np.argsort(social_ppr_mat, axis=-1)[:,-top_k:] #(user_num, top k)
+
+        user_index = np.arange(self.num_users).reshape(self.num_users, 1)
+        user_index = np.tile(user_index, top_k).reshape(1, -1)
+
+        # pdb.set_trace()
+        # b = np.array([[0, 3], [0, 9], [0, 5]]).reshape(1, -1)
+        indices = indices.reshape(1, -1)
+        indices = np.concatenate([user_index, indices], axis=0).tolist()
+        # a = [[1,2,3], [4,5,6]]
+        ppr_mask_mat = np.zeros_like(social_ppr_mat)
+        ppr_mask_mat[indices] = 1
+
+        if mask_ori:
+            # true neighbors, mask origin social graph.
+            ppr_mask_mat = ppr_mask_mat * bs_matrix 
+
+        if add_norm:
+            # calculat norm weights
+            rowsum = np.array(ppr_mask_mat.sum(1))
+            d_inv = np.power(rowsum, -0.5).flatten()
+            d_inv[np.isinf(d_inv)] = 0.
+            d_mat_inv = sp.diags(d_inv)
+            norm_adj_tmp = d_mat_inv.dot(ppr_mask_mat)
+        else:
+            norm_adj_tmp = np.array(ppr_mask_mat)
+        # sample_prob = self.social_ppr_mat
+        # sample_prob = tf.nn.softmax(sample_prob)
+        # # topKUsers = t.multinomial(sample_prob, top_k) #(user_num, topk)
+        # indices = tf.math.top_k(sample_prob, top_k)[1]
+        # pdb.set_trace()
+
+        # gcn, 多层
+        # pdb.set_trace()
+        norm_adj_tmp = sp.csr_matrix(norm_adj_tmp)
+        socail_ppr_mat = self._convert_sp_mat_to_sp_tensor(norm_adj_tmp)
+
+        # userEmbedding = userEmbedding * tf.nn.sigmoid(tf.layers.dense(inputs=userEmbedding, units=self.emb_size, activation=None))
+        userEmbedding = userEmbedding
+
+        if add_self==True:
+            all_social_embeddings_global = [userEmbedding]
+        else:
+            all_social_embeddings_global = []
+
+        # for k in range(self.n_layers):
+        for k in range(social_layer_num):
+            # friend view, local
+            friend_view_embeddings_local = tf.sparse_tensor_dense_matmul(socail_ppr_mat, userEmbedding)
+            norm_embeddings = tf.math.l2_normalize(friend_view_embeddings_local, axis=1)
+            all_social_embeddings_global += [norm_embeddings]
+        
+        subgraph_emb = tf.reduce_sum(all_social_embeddings_global, axis=0)
+        # self.local_social_embeddings = tf.reduce_sum(all_social_embeddings_local, axis=0)
+        # subgraph_emb = tf.sparse_tensor_dense_matmul(socail_ppr_mat, userEmbedding)
+        # norm_adj_tmp
+        # topKuserEmbs = tf.nn.embedding_lookup(userEmbedding, indices)
+        # topKuserEmbs = userEmbedding[topKUsers] #(user_num, topk, dim)
+        
+        # return tf.reduce_sum(topKuserEmbs, axis=1) #(user_num, dim)
+        # pdb.set_trace()
+        return subgraph_emb
+    
+
+    def gcn_on_social_net(self, social_local_mat, input_embeddings):
+        """
+        socail_ppr_mat: sp_mat
+        social_local_mat: sp_mat
+        """
+        # socail_ppr_mat = self._convert_sp_mat_to_sp_tensor(socail_ppr_mat)
+        social_local_mat = self._convert_sp_mat_to_sp_tensor(social_local_mat)
+        # add self-gating
+        # user_embeedings_v1 = self.user_embeddings * tf.nn.sigmoid(tf.layers.dense(inputs=input_embeddings, units=self.emb_size, activation=None))
+        user_embeedings_v1 = input_embeddings
+        # user_embeedings_v2 = self.user_embeddings * tf.nn.sigmoid(tf.layers.dense(inputs=self.user_embeddings, units=self.emb_size, activation=None))
+        # friend_view_embeddings_global, friend_view_embeddings_local = user_embeedings_v1, user_embeedings_v2
+        friend_view_embeddings_local = user_embeedings_v1
+        # all_social_embeddings_local = [user_embeedings_v1]
+        all_social_embeddings_local = []
+        # all_social_embeddings_global = [user_embeedings_v2]
+        
+        # all_social_embeddings_local = []
+        # all_social_embeddings_global = []
+        # friend view, global
+        # friend_view_embeddings_global = tf.sparse_tensor_dense_matmul(socail_ppr_mat, friend_view_embeddings_global)
+        # norm_embeddings = tf.math.l2_normalize(friend_view_embeddings_global, axis=1)
+        # all_social_embeddings_global += [norm_embeddings]
+        
+        for k in range(self.n_layers):
+            # friend view, local
+            friend_view_embeddings_local = tf.sparse_tensor_dense_matmul(social_local_mat, friend_view_embeddings_local)
+            norm_embeddings = tf.math.l2_normalize(friend_view_embeddings_local, axis=1)
+            all_social_embeddings_local += [norm_embeddings]
+        
+        # self.global_social_embeddings = tf.reduce_sum(all_social_embeddings_global, axis=0)
+        local_social_embeddings = tf.reduce_sum(all_social_embeddings_local, axis=0)
+        return local_social_embeddings
+
+        # return 
+
     
     def graph_partition(self, adjacency_mat, n=10):
         """
@@ -386,7 +520,7 @@ class SEPT(SocialRecommender, GraphRecommender):
         return ss_labels
 
     def initModel(self):
-        super(SEPT, self).initModel()
+        super(SEPTV2, self).initModel()
         self.neg_idx = tf.placeholder(tf.int32, name="neg_holder")
         self._create_variable()
         self.bs_matrix = self.get_birectional_social_matrix()
@@ -483,31 +617,52 @@ class SEPT(SocialRecommender, GraphRecommender):
         self.batch_pos_item_emb = tf.nn.embedding_lookup(self.rec_item_embeddings, self.v_idx)
         self.batch_neg_item_emb = tf.nn.embedding_lookup(self.rec_item_embeddings, self.neg_idx)
 
-        # add social-based ppr mat
-        social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat()
+        if self.ppr_rate != 0.0:
+            # add social-based ppr mat
+            social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat()
 
-        # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type='hk', weight=0.7)
-        # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type='origin')
-        # social_mat = self._convert_sp_mat_to_sp_tensor(social_ppr_mat)
-        # social_mat = tf.sparse.to_dense(social_mat)
-        self.social_ppr_mat = tf.convert_to_tensor(social_ppr_mat, dtype=tf.float32) #(userNum, userNum)
-        self.user_user_sim = tf.matmul(self.rec_user_embeddings, tf.transpose(self.rec_user_embeddings, perm=[1, 0])) #(userNum, userNum)
+            # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type='hk', weight=0.7)
+            # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type='origin')
+            # social_mat = self._convert_sp_mat_to_sp_tensor(social_ppr_mat)
+            # social_mat = tf.sparse.to_dense(social_mat)
+            self.social_ppr_mat = tf.convert_to_tensor(social_ppr_mat, dtype=tf.float32) #(userNum, userNum)
+            self.user_user_sim = tf.matmul(self.rec_user_embeddings, tf.transpose(self.rec_user_embeddings, perm=[1, 0])) #(userNum, userNum)
         # pdb.set_trace()
 
-        # add social based CL loss, performance is not good.
-        self.bi_social_matrix = self.get_birectional_social_matrix_v2()
-        self.global_social_user_emb, self.local_social_user_emb = self.get_local_global_user_rep(social_ppr_sp_mat, self.bi_social_matrix)
+        if self.s_cl_rate != 0.0:
+            # add social based CL loss, performance is not good.
+            self.bi_social_matrix = self.get_birectional_social_matrix_v2()
+            self.global_social_user_emb, self.local_social_user_emb = self.get_local_global_user_rep(social_ppr_sp_mat, self.bi_social_matrix)
 
-        # add top k merge emb
-        # self.social_ppr_cluster_emb = self.sampleTopkUsers(self.user_embeddings)
-        # self.social_ppr_cluster_emb = self.sampleTopkUsers(self.rec_user_embeddings) # context embedding. not good.
-        self.social_ppr_cluster_emb = tf.tile(tf.expand_dims(tf.reduce_mean(self.rec_user_embeddings, axis=0), 0), [self.num_users,1]) # global embedding. not good.
-        self.item_ppr_cluster_emb = tf.tile(tf.expand_dims(tf.reduce_mean(self.rec_item_embeddings, axis=0), 0), [self.num_items,1]) # global embedding. not good.
-
-        # add dropout edged grpahs
-        self.batch_user_aug_emb = tf.nn.embedding_lookup(self.aug_user_embeddings, self.u_idx)
-        self.batch_pos_item_aug_emb = tf.nn.embedding_lookup(self.aug_item_embeddings, self.v_idx)
-        self.batch_neg_item_aug_emb = tf.nn.embedding_lookup(self.aug_item_embeddings, self.neg_idx)
+        if self.social_ppr_cluster_w != 0.0:
+            # add top k merge emb
+            # self.social_ppr_cluster_emb = self.sampleTopkUsers(self.user_embeddings)
+            # self.cluster_type = 1
+            if self.cluster_type == 1: #top_10 is better than top_5 and top_20.
+                self.social_ppr_cluster_emb = self.sampleTopkUsers(self.rec_user_embeddings, top_k=10) # context embedding. not good. 模型是有效的, 说明聚合操作可以深挖; how to cluster users? 通过graph partition得到每个节点的标签, 根据标签得到聚合表征;
+            elif self.cluster_type == 2: # todo
+                self.social_ppr_cluster_emb = tf.tile(tf.expand_dims(tf.reduce_mean(self.rec_user_embeddings, axis=0), 0), [self.num_users,1]) # global embedding. not good.
+                self.item_ppr_cluster_emb = tf.tile(tf.expand_dims(tf.reduce_mean(self.rec_item_embeddings, axis=0), 0), [self.num_items,1]) # global embedding. not good.
+                self.edgo_ppr_cluster_emb = tf.concat([self.social_ppr_cluster_emb, self.item_ppr_cluster_emb], axis=0) #(num_user + num_item, dim)
+            elif self.cluster_type == 3: # same as cluster_type: 1
+                # self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(self.rec_user_embeddings, top_k=5, mask_ori=True, social_ppr_mat=social_ppr_mat)
+                # self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(self.rec_user_embeddings, top_k=10, mask_ori=True, social_ppr_mat=social_ppr_mat)
+                # self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(self.rec_user_embeddings, top_k=10, mask_ori=True, social_ppr_mat=social_ppr_mat, add_norm=False)
+                # self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(self.rec_user_embeddings, top_k=10, mask_ori=True, social_ppr_mat=social_ppr_mat, add_norm=True) # best result
+                # self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(self.rec_user_embeddings, top_k=10, social_ppr_mat=social_ppr_mat, mask_ori=True,  add_norm=True, add_self=False)
+                self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(self.rec_user_embeddings, top_k=10, social_ppr_mat=social_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2) 
+            elif self.cluster_type == 4: # worse than cluster_type_1
+                nor_social_mat = self.get_birectional_social_matrix_v2()
+                self.social_ppr_cluster_emb = self.gcn_on_social_net(nor_social_mat, self.rec_user_embeddings)
+            if self.cluster_type == 5: #worse than cluster_type_1
+                self.social_ppr_cluster_emb = self.sampleTopkUsers(self.rec_user_embeddings, top_k=10) # context embedding. not good. 模型是有效的, 说明聚合操作可以深挖; how to cluster users? 通过graph partition得到每个节点的标签, 根据标签得到聚合表征;
+                self.social_global_cluster_emb = tf.tile(tf.expand_dims(tf.reduce_sum(self.social_ppr_cluster_emb, axis=0), 0), [self.num_users,1]) # [num_user, dim]
+        
+        if self.rec_loss_aug_w != 0.0:
+            # add dropout edged grpahs
+            self.batch_user_aug_emb = tf.nn.embedding_lookup(self.aug_user_embeddings, self.u_idx)
+            self.batch_pos_item_aug_emb = tf.nn.embedding_lookup(self.aug_item_embeddings, self.v_idx)
+            self.batch_neg_item_aug_emb = tf.nn.embedding_lookup(self.aug_item_embeddings, self.neg_idx)
 
         # interaction-based loss
         if self.interact_ppr_w != 0.0:
@@ -516,25 +671,49 @@ class SEPT(SocialRecommender, GraphRecommender):
             self.edgo_edgo_sim = tf.matmul(all_embeddings, tf.transpose(all_embeddings, perm=[1, 0])) #(userNum, userNum)
         # self.edgo_aug_v2_emb = self.get_global_user_rep(interact_ppr_sp_mat)
 
-        # add uu ppr and ii ppr
-        self.user_user_aug_sim = tf.matmul(self.aug_user_embeddings, tf.transpose(self.aug_user_embeddings, perm=[1, 0])) #(userNum, userNum)
-        uu_inter_mat, ii_inter_mat = self.get_interaction_uu_ii(uu_weight=0, ii_weight=0)
-        uu_inter_ppr_mat, uu_inter_ppr_sp_mat =  self.cal_ppr_common(uu_inter_mat) # good results.
-        # ii_inter_ppr_mat, ii_inter_ppr_sp_mat =  self.cal_ppr_common(ii_inter_mat)
-        # uu_inter_ppr_mat = uu_inter_mat.toarray() * uu_inter_ppr_mat # origin matric, bad results.
-        # uu_inter_ppr_mat = uu_inter_mat.toarray() # origin matric, bad results.
-        # ii_inter_ppr_mat = ii_inter_mat.toarray() # origin matric
-        self.uu_inter_ppr_mat = tf.convert_to_tensor(uu_inter_ppr_mat, dtype=tf.float32) #(userNum, userNum)
-        # self.ii_inter_ppr_mat = tf.convert_to_tensor(ii_inter_ppr_mat, dtype=tf.float32) #(userNum, userNum)
-        # self.item_item_sim = tf.matmul(self.rec_item_embeddings, tf.transpose(self.rec_item_embeddings, perm=[1, 0])) #(userNum, userNum)
+        if self.inter_ppr_w != 0.0:
+            # add uu ppr and ii pprdd
+            self.user_user_aug_sim = tf.matmul(self.aug_user_embeddings, tf.transpose(self.aug_user_embeddings, perm=[1, 0])) #(userNum, userNum)
+            uu_inter_mat, ii_inter_mat = self.get_interaction_uu_ii(uu_weight=0, ii_weight=0)
+            uu_inter_ppr_mat, uu_inter_ppr_sp_mat =  self.cal_ppr_common(uu_inter_mat) # good results.
+            # ii_inter_ppr_mat, ii_inter_ppr_sp_mat =  self.cal_ppr_common(ii_inter_mat)
+            # uu_inter_ppr_mat = uu_inter_mat.toarray() * uu_inter_ppr_mat # origin matric, bad results.
+            # uu_inter_ppr_mat = uu_inter_mat.toarray() # origin matric, bad results.
+            # ii_inter_ppr_mat = ii_inter_mat.toarray() # origin matric
+            self.uu_inter_ppr_mat = tf.convert_to_tensor(uu_inter_ppr_mat, dtype=tf.float32) #(userNum, userNum)
+            # self.ii_inter_ppr_mat = tf.convert_to_tensor(ii_inter_ppr_mat, dtype=tf.float32) #(userNum, userNum)
+            # self.item_item_sim = tf.matmul(self.rec_item_embeddings, tf.transpose(self.rec_item_embeddings, perm=[1, 0])) #(userNum, userNum)
 
-        self.graph_label_num = 20
-        graph_label = self.graph_partition(self.bs_matrix.toarray(), self.graph_label_num)
-        self.graph_label = tf.Variable(graph_label, trainable=False)
-        self.graph_batch_label = tf.nn.embedding_lookup(self.graph_label, self.u_idx)
-        # pdb.set_trace()
+        if self.graph_label_w != 0.0:
+            self.graph_label_num = self.num_users // 50
+            graph_label = self.graph_partition(self.bs_matrix.toarray(), self.graph_label_num)
+            self.graph_label = tf.Variable(graph_label, trainable=False)
+            self.graph_batch_label = tf.nn.embedding_lookup(self.graph_label, self.u_idx)
+
+            # pdb.set_trace()
       
     def ssl_layer_loss(self, userEmb, userEmbAug, ssl_temp=0.1):
+        """
+        cl loss in one batch, not in all users.
+        one side.
+        """
+        def score(x1, x2):
+            return tf.reduce_sum(tf.multiply(x1, x2), axis=1)
+        # current_user_embeddings = userEmb[user]
+        user_embeddings = tf.nn.embedding_lookup(userEmb, tf.unique(self.u_idx)[0])
+        aug_user_embeddings = tf.nn.embedding_lookup(userEmbAug, tf.unique(self.u_idx)[0])
+        user_embeddings = tf.nn.l2_normalize(user_embeddings, axis=1)
+        aug_user_embeddings = tf.nn.l2_normalize(aug_user_embeddings, axis=1)
+        
+        pos = score(user_embeddings, aug_user_embeddings) #(user_num)
+        ttl_score = tf.matmul(user_embeddings, aug_user_embeddings, transpose_a=False, transpose_b=True) #(user_num, user_num)
+        pos_score = tf.exp(pos / ssl_temp)
+        ttl_score = tf.reduce_sum(tf.exp(ttl_score / ssl_temp), axis=1)
+        ssl_loss = - tf.reduce_sum(tf.log(pos_score / ttl_score))
+
+        return ssl_loss
+
+    def ssl_layer_both_item_loss(self, userEmb, userEmbAug, ssl_temp=0.1):
         """
         cl loss in one batch, not in all users.
         one side.
@@ -628,73 +807,85 @@ class SEPT(SocialRecommender, GraphRecommender):
 
         reg_loss = self.regU * (tf.nn.l2_loss(self.batch_user_emb) + tf.nn.l2_loss(self.batch_pos_item_emb) + tf.nn.l2_loss(
                 self.batch_neg_item_emb)) #与Lightgcn对齐.
-        # self-supervision prediction
-        social_prediction = self.label_prediction(self.friend_view_embeddings)
-        sharing_prediction = self.label_prediction(self.sharing_view_embeddings)
-        rec_prediction = self.label_prediction(self.rec_user_embeddings)
-        # find informative positive examples for each encoder
-        self.f_pos = self.generate_pesudo_labels(sharing_prediction, rec_prediction)
-        self.sh_pos = self.generate_pesudo_labels(social_prediction, rec_prediction)
-        self.r_pos = self.generate_pesudo_labels(social_prediction, sharing_prediction)
-        # neighbor-discrimination based contrastive learning
-        self.neighbor_dis_loss = self.neighbor_discrimination(self.f_pos, self.friend_view_embeddings)
-        self.neighbor_dis_loss += self.neighbor_discrimination(self.sh_pos, self.sharing_view_embeddings)
-        self.neighbor_dis_loss += self.neighbor_discrimination(self.r_pos, self.rec_user_embeddings)
-        #only rec-based loss
-        # neighbor_w = 1.0
-        # self.neighbor_dis_loss = self.ss_rate * self.neighbor_discrimination(self.r_pos, self.rec_user_embeddings)
-        # self.neighbor_dis_loss = self.ss_rate * self.neighbor_discrimination(self.sh_pos, self.sharing_view_embeddings)
-        # self.neighbor_dis_loss = self.ss_rate * self.neighbor_discrimination(self.f_pos, self.friend_view_embeddings)
-
-        self.neighbor_dis_loss = self.ss_rate * self.neighbor_dis_loss
-
-        # 1. add social-based ppr loss
-        self.social_ppr_loss = self.ppr_rate * tf.losses.mean_squared_error(self.social_ppr_mat, self.user_user_sim)
-
-        # 2. add social-based loss
-        # self.socail_cl_loss_v1 = self.ssl_layer_loss(self.global_social_user_emb, self.local_social_user_emb)
-        # self.socail_cl_loss_v2 = self.ssl_layer_loss(self.local_social_user_emb, self.global_social_user_emb)
         
-        self.socail_cl_loss_v1 = self.ssl_layer_loss(self.rec_user_embeddings, self.local_social_user_emb) #v2
-        self.socail_cl_loss_v2 = self.ssl_layer_loss(self.rec_user_embeddings, self.global_social_user_emb)
-        # self.socail_cl_loss_v1 = self.hinge_cl_loss(self.rec_user_embeddings, self.local_social_user_emb)
-        # self.socail_cl_loss_v2 = self.hinge_cl_loss(self.rec_user_embeddings, self.global_social_user_emb)
-        self.social_cl_loss_final = self.s_cl_rate * (self.socail_cl_loss_v1 + self.socail_cl_loss_v2)/2
-
-        # 3. add top k user embedding.
-        self.social_ppr_cluster_loss = self.social_ppr_cluster_w * self.ssl_layer_loss(self.rec_user_embeddings, self.social_ppr_cluster_emb)
-        # self.social_ppr_cluster_loss += self.social_ppr_cluster_w * self.ssl_layer_loss(self.rec_item_embeddings, self.item_ppr_cluster_emb)
-        # self.socail_ppr_cluster_hinge_loss = self.social_ppr_cluster_w * self.hinge_cl_loss(self.user_embeddings, self.social_ppr_cluster_emb)
-
-        # 4. recover from the masked graph
-        # self.rec_loss_aug = bpr_loss(self.batch_user_aug_emb, self.batch_pos_item_aug_emb, self.batch_neg_item_aug_emb) # v1
-        self.rec_loss_aug = self.rec_loss_aug_w * (self.ssl_layer_loss(self.rec_user_embeddings, self.aug_user_embeddings) + self.ssl_layer_loss(self.rec_item_embeddings, self.aug_item_embeddings))
-        # self.rec_loss_aug = self.rec_loss_aug_w * (self.ssl_layer_loss(self.rec_user_embeddings, self.aug_user_embeddings))
-        
-        # 5. add interaction ppr loss
-        # self.uu_inter_ppr_loss = tf.losses.mean_squared_error(self.uu_inter_ppr_mat, self.user_user_sim) # v1
-        self.uu_inter_ppr_loss = self.inter_ppr_w * tf.losses.mean_squared_error(self.uu_inter_ppr_mat, self.user_user_aug_sim) # v2, add regular on the argumented graph
-        # self.uu_inter_ppr_loss = self.inter_ppr_w * (tf.losses.mean_squared_error(self.uu_inter_ppr_mat, self.user_user_aug_sim) + 0.5 * tf.losses.mean_squared_error(self.ii_inter_ppr_mat, self.item_item_aug_sim))
-        # self.ii_inter_ppr_loss = tf.losses.mean_squared_error(self.ii_inter_ppr_mat, self.item_item_sim)
-
-        logit_user = tf.layers.dense(inputs=tf.reshape(self.batch_user_emb, [-1, self.emb_size]), units=self.graph_label_num, activation=None)
-        self.graph_label_loss = self.graph_label_w * tf.losses.sparse_softmax_cross_entropy(self.graph_batch_label, logit_user)
-        # self.graph_label_loss = self.graph_label_w * tf.nn.sigmoid_cross_entropy_with_logits(logits=logit_user, labels=self.graph_batch_label)
-
-        # optimizer setting
+        # rec loss
         loss = rec_loss
-        loss += self.neighbor_dis_loss
-        loss += self.social_ppr_loss # ppr is good;
-        loss += self.social_cl_loss_final # not good;
-        # loss += self.social_ppr_cluster_w * self.social_ppr_cluster_loss
-        loss += self.social_ppr_cluster_loss # not good;
 
-        loss += self.rec_loss_aug # good;
+        if self.ss_rate != 0.0:
+            # self-supervision prediction
+            social_prediction = self.label_prediction(self.friend_view_embeddings)
+            sharing_prediction = self.label_prediction(self.sharing_view_embeddings)
+            rec_prediction = self.label_prediction(self.rec_user_embeddings)
+            # find informative positive examples for each encoder
+            self.f_pos = self.generate_pesudo_labels(sharing_prediction, rec_prediction)
+            self.sh_pos = self.generate_pesudo_labels(social_prediction, rec_prediction)
+            self.r_pos = self.generate_pesudo_labels(social_prediction, sharing_prediction)
+            # neighbor-discrimination based contrastive learning
+            self.neighbor_dis_loss = self.neighbor_discrimination(self.f_pos, self.friend_view_embeddings)
+            self.neighbor_dis_loss += self.neighbor_discrimination(self.sh_pos, self.sharing_view_embeddings)
+            self.neighbor_dis_loss += self.neighbor_discrimination(self.r_pos, self.rec_user_embeddings)
+            self.neighbor_dis_loss = self.ss_rate * self.neighbor_dis_loss
+            #only rec-based loss
+            # neighbor_w = 1.0
+            # self.neighbor_dis_loss = self.ss_rate * self.neighbor_discrimination(self.r_pos, self.rec_user_embeddings)
+            # self.neighbor_dis_loss = self.ss_rate * self.neighbor_discrimination(self.sh_pos, self.sharing_view_embeddings)
+            # self.neighbor_dis_loss = self.ss_rate * self.neighbor_discrimination(self.f_pos, self.friend_view_embeddings)
+            loss += self.neighbor_dis_loss
 
-        loss += self.uu_inter_ppr_loss # 
-        # loss += self.inter_ppr_w * (self.uu_inter_ppr_loss + self.ii_inter_ppr_loss)
+        if self.ppr_rate != 0.0:
+            # 1. add social-based ppr loss
+            self.social_ppr_loss = self.ppr_rate * tf.losses.mean_squared_error(self.social_ppr_mat, self.user_user_sim)
+            loss += self.social_ppr_loss # ppr is good;
 
-        loss += self.graph_label_loss
+        if self.s_cl_rate != 0.0:
+            # 2. add social-based loss
+            # self.socail_cl_loss_v1 = self.ssl_layer_loss(self.global_social_user_emb, self.local_social_user_emb)
+            # self.socail_cl_loss_v2 = self.ssl_layer_loss(self.local_social_user_emb, self.global_social_user_emb)
+            self.socail_cl_loss_v1 = self.ssl_layer_loss(self.rec_user_embeddings, self.local_social_user_emb) #v2
+            self.socail_cl_loss_v2 = self.ssl_layer_loss(self.rec_user_embeddings, self.global_social_user_emb)
+            # self.socail_cl_loss_v1 = self.hinge_cl_loss(self.rec_user_embeddings, self.local_social_user_emb)
+            # self.socail_cl_loss_v2 = self.hinge_cl_loss(self.rec_user_embeddings, self.global_social_user_emb)
+            self.social_cl_loss_final = self.s_cl_rate * (self.socail_cl_loss_v1 + self.socail_cl_loss_v2)/2
+            loss += self.social_cl_loss_final # not good;
+
+        if self.social_ppr_cluster_w != 0.0:
+            # 3. add top k user embedding.
+            if self.cluster_type == 1 or self.cluster_type == 3 or self.cluster_type == 4:
+                self.social_ppr_cluster_loss = self.social_ppr_cluster_w * self.ssl_layer_loss(self.rec_user_embeddings, self.social_ppr_cluster_emb)
+                # self.social_ppr_cluster_loss += self.social_ppr_cluster_w * self.ssl_layer_loss(self.rec_item_embeddings, self.item_ppr_cluster_emb)
+                # self.socail_ppr_cluster_hinge_loss = self.social_ppr_cluster_w * self.hinge_cl_loss(self.user_embeddings, self.social_ppr_cluster_emb)
+                # loss += self.social_ppr_cluster_w * self.social_ppr_cluster_loss
+            elif self.cluster_type == 2:
+                self.social_ppr_cluster_loss = self.social_ppr_cluster_w * self.ssl_layer_both_item_loss(self.edgo_ppr_cluster_emb, self.social_ppr_cluster_emb)
+            
+            elif self.cluster_type == 5:
+                self.social_ppr_cluster_loss = self.social_ppr_cluster_w * (self.ssl_layer_both_item_loss(self.rec_user_embeddings, self.social_ppr_cluster_emb) + self.ssl_layer_both_item_loss(self.social_ppr_cluster_emb, self.social_global_cluster_emb))
+                
+            loss += self.social_ppr_cluster_loss # not good;
+
+
+        if self.rec_loss_aug_w != 0.0:
+            # 4. recover from the masked graph
+            # self.rec_loss_aug = bpr_loss(self.batch_user_aug_emb, self.batch_pos_item_aug_emb, self.batch_neg_item_aug_emb) # v1
+            self.rec_loss_aug = self.rec_loss_aug_w * (self.ssl_layer_loss(self.rec_user_embeddings, self.aug_user_embeddings) + self.ssl_layer_loss(self.rec_item_embeddings, self.aug_item_embeddings))
+            # self.rec_loss_aug = self.rec_loss_aug_w * (self.ssl_layer_loss(self.rec_user_embeddings, self.aug_user_embeddings))
+            loss += self.rec_loss_aug # good;
+        
+        if self.inter_ppr_w != 0.0:
+            # 5. add interaction ppr loss
+            # self.uu_inter_ppr_loss = tf.losses.mean_squared_error(self.uu_inter_ppr_mat, self.user_user_sim) # v1
+            self.uu_inter_ppr_loss = self.inter_ppr_w * tf.losses.mean_squared_error(self.uu_inter_ppr_mat, self.user_user_aug_sim) # v2, add regular on the argumented graph
+            # self.uu_inter_ppr_loss = self.inter_ppr_w * (tf.losses.mean_squared_error(self.uu_inter_ppr_mat, self.user_user_aug_sim) + 0.5 * tf.losses.mean_squared_error(self.ii_inter_ppr_mat, self.item_item_aug_sim))
+            # self.ii_inter_ppr_loss = tf.losses.mean_squared_error(self.ii_inter_ppr_mat, self.item_item_sim)
+            loss += self.uu_inter_ppr_loss # 
+
+        if self.graph_label_w != 0.0:
+            logit_user = tf.layers.dense(inputs=tf.reshape(self.batch_user_emb, [-1, self.emb_size]), units=self.graph_label_num, activation=None)
+            self.graph_label_loss = self.graph_label_w * tf.losses.sparse_softmax_cross_entropy(self.graph_batch_label, logit_user)
+            # self.graph_label_loss = self.graph_label_w * tf.nn.sigmoid_cross_entropy_with_logits(logits=logit_user, labels=self.graph_batch_label)
+            loss += self.graph_label_loss
+        # optimizer setting
+        # loss += self.inter_ppr_w * (self.uu_inter_ppr_loss + self.ii_inter_ppr_loss)   
 
         if self.interact_ppr_w != 0.0:
             # add interaction intimacy scores
@@ -714,7 +905,7 @@ class SEPT(SocialRecommender, GraphRecommender):
         self.sess.run(init)
         for epoch in range(self.maxEpoch):
             #joint learning
-            if epoch > self.maxEpoch / 3:
+            if epoch > self.maxEpoch / 3: #need ?
             # if epoch > -1:
                 #pdb.set_trace()
                 sub_mat = {}
@@ -735,9 +926,12 @@ class SEPT(SocialRecommender, GraphRecommender):
                         self.sub_mat['adj_indices_sub']: sub_mat['adj_indices_sub'],
                         self.sub_mat['adj_shape_sub']: sub_mat['adj_shape_sub'],
                     })
-                    _, opt_l, l1, l2, l3 = self.sess.run([v2_op, loss, rec_loss, self.neighbor_dis_loss, self.social_ppr_loss],feed_dict=feed_dict)
+                    # _, opt_l, l1, l2, l3 = self.sess.run([v2_op, loss, rec_loss, self.neighbor_dis_loss, self.social_ppr_loss],feed_dict=feed_dict)
+                    # _, opt_l, l1, l2 = self.sess.run([v2_op, loss, rec_loss, self.graph_label_loss],feed_dict=feed_dict)
+                    _, opt_l, l1 = self.sess.run([v2_op, loss, rec_loss],feed_dict=feed_dict)
                     # pdb.set_trace()
-                    print(self.foldInfo, 'training:', epoch + 1, 'batch', n, 'total loss:', opt_l, 'rec loss:', l1, 'social_cl_loss:', l3)
+                    # print(self.foldInfo, 'training:', epoch + 1, 'batch', n, 'total loss:', opt_l, 'rec loss:', l1, 'graph_label_loss:', l2)
+                    print(self.foldInfo, 'training:', epoch + 1, 'batch', n, 'total loss:', opt_l, 'rec loss:', l1)
             else:
                 #initialization with only recommendation task
                 for n, batch in enumerate(self.next_batch_pairwise()):

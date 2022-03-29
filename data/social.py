@@ -4,7 +4,7 @@ from collections import defaultdict
 class Social(object):
     def __init__(self,conf,relation=None):
         self.config = conf
-        self.user = {} #used to store the order of users
+        self.user = {} #used to store the order of users.
         self.relation = relation
         self.followees = defaultdict(dict)
         self.followers = defaultdict(dict)

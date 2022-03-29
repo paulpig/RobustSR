@@ -160,7 +160,7 @@ class IterativeRecommender(Recommender):
             #         exit(0)
 
         else:
-            self.bestPerformance.append(epoch+1)
+            self.bestPerformance.append(epoch+1) # list of [epoch, dict of metric].
             performance = {}
             for m in measure[1:]:
                 k,v = m.strip().split(':')

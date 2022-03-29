@@ -3,6 +3,9 @@ import numpy as np
 import scipy.sparse as sp
 import tensorflow as tf
 
+"""
+Generate sparse adjaceny.
+"""
 class GraphRecommender(DeepRecommender):
     def __init__(self,conf,trainingSet,testSet,fold='[1]'):
         super(GraphRecommender, self).__init__(conf,trainingSet,testSet,fold)

@@ -1,6 +1,7 @@
 from base.iterativeRecommender import IterativeRecommender
 from random import shuffle,randint,choice
 import tensorflow as tf
+import pdb
 
 class DeepRecommender(IterativeRecommender):
     def __init__(self,conf,trainingSet,testSet,fold='[1]'):
@@ -27,6 +28,7 @@ class DeepRecommender(IterativeRecommender):
         self.sess = tf.Session(config=config)
 
     def next_batch_pairwise(self):
+        # pdb.set_trace()
         shuffle(self.data.trainingData)
         batch_id = 0
         while batch_id < self.train_size:
