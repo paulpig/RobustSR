@@ -1,5 +1,7 @@
 from cProfile import label
-from re import T
+from multiprocessing import reduction
+# from re import T
+# from matplotlib.pyplot import axis
 from base.graphRecommender import GraphRecommender
 from base.socialRecommender import SocialRecommender
 import tensorflow as tf
@@ -19,14 +21,14 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 We have transplated QRec from py2 to py3. But we found that, with py3, SEPT achieves higher NDCG
 but lower (slightly) Prec and Recall compared with the results reported in the paper.
 '''
-class SEPTV2(SocialRecommender, GraphRecommender):
+class SEPTV2_yelp(SocialRecommender, GraphRecommender):
     def __init__(self, conf, trainingSet=None, testSet=None, relation=None, fold='[1]'):
         GraphRecommender.__init__(self, conf=conf, trainingSet=trainingSet, testSet=testSet, fold=fold)
         SocialRecommender.__init__(self, conf=conf, trainingSet=trainingSet, testSet=testSet, relation=relation,fold=fold)
 
     def readConfiguration(self):
-        super(SEPTV2, self).readConfiguration()
-        args = config.OptionConf(self.config['SEPTV2'])
+        super(SEPTV2_yelp, self).readConfiguration()
+        args = config.OptionConf(self.config['SEPTV2_yelp'])
         self.n_layers = int(args['-n_layer'])
         self.ss_rate = float(args['-ss_rate'])
         self.drop_rate = float(args['-drop_rate'])
@@ -462,7 +464,7 @@ class SEPTV2(SocialRecommender, GraphRecommender):
         # return tf.reduce_sum(topKuserEmbs, axis=1) #(user_num, dim)
         # pdb.set_trace()
         return subgraph_emb
-
+    
 
     def sampleTopkUsersKeepOriFromInteraction(self, userEmbedding, top_k=10, social_ppr_mat=None, mask_ori=False, add_norm=True, add_self=True, social_layer_num=1):
         """
@@ -660,8 +662,23 @@ class SEPTV2(SocialRecommender, GraphRecommender):
         n_cuts, ss_labels = pymetis.part_graph(n, adjacency=adjacency_list)
         return ss_labels
 
+    def _split_A_hat(self, X):
+        A_fold_hat = []
+        self.n_fold = 2000
+        fold_len = (self.num_users) // self.n_fold
+        for i_fold in range(self.n_fold):
+            start = i_fold * fold_len
+            if i_fold == self.n_fold -1:
+                end = self.num_users
+            else:
+                end = (i_fold + 1) * fold_len
+            A_fold_hat.append(tf.convert_to_tensor(X[start:end, :], dtype=tf.float32))
+            # A_fold_hat.append(self._convert_sp_mat_to_sp_tensor(X[start:end]))
+            # print("start: {}, end: {}".format(start, end))
+        return A_fold_hat
+
     def initModel(self):
-        super(SEPTV2, self).initModel()
+        super(SEPTV2_yelp, self).initModel()
         self.neg_idx = tf.placeholder(tf.int32, name="neg_holder")
         self._create_variable()
         self.bs_matrix = self.get_birectional_social_matrix()
@@ -766,8 +783,13 @@ class SEPTV2(SocialRecommender, GraphRecommender):
             # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type='origin')
             # social_mat = self._convert_sp_mat_to_sp_tensor(social_ppr_mat)
             # social_mat = tf.sparse.to_dense(social_mat)
-            self.social_ppr_mat = tf.convert_to_tensor(social_ppr_mat, dtype=tf.float32) #(userNum, userNum)
-            self.user_user_sim = tf.matmul(self.rec_user_embeddings, tf.transpose(self.rec_user_embeddings, perm=[1, 0])) #(userNum, userNum)
+            # self.social_ppr_mat = tf.convert_to_tensor(social_ppr_mat, dtype=tf.float32) #(userNum, userNum), OOM, wrong;
+            # self.user_user_sim = tf.matmul(self.rec_user_embeddings, tf.transpose(self.rec_user_embeddings, perm=[1, 0])) #(userNum, userNum)
+            self.social_ppr_sub_tensor_list = self._split_A_hat(social_ppr_mat)
+            rec_user_embeddings_split = self._split_A_hat(self.rec_user_embeddings)
+            self.rec_user_user_sim_list = []
+            for sub_rec_user_embs in rec_user_embeddings_split:
+                self.rec_user_user_sim_list.append(tf.matmul(sub_rec_user_embs, tf.transpose(self.rec_user_embeddings, perm=[1, 0])))
         # pdb.set_trace()
 
         if self.s_cl_rate != 0.0:
@@ -806,12 +828,15 @@ class SEPTV2(SocialRecommender, GraphRecommender):
             elif self.cluster_type == 6:
                 self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(self.rec_user_embeddings, top_k=10, social_ppr_mat=social_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2) #目前的sota.
                 # add interactioin uu cluster emb
-                self.inter_flag = True
-                # todo
-                uu_inter_mat, ii_inter_mat = self.get_interaction_uu_ii(uu_weight=0, ii_weight=0) # csr mat; 调整下不同的参数的效果;
-                uu_inter_ppr_mat, uu_inter_ppr_sp_mat =  self.cal_ppr_common(uu_inter_mat) # good results.
-                # uu_inter_ppr_mat = uu_inter_ppr_mat.toarray()
-                self.interaction_cluster_emb = self.sampleTopkUsersKeepOriFromInteractionUUMat(self.rec_user_embeddings, top_k=10, social_ppr_mat=uu_inter_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2)
+                # self.inter_flag = True
+                self.inter_flag = False
+
+                if self.inter_flag == True:
+                    # todo
+                    uu_inter_mat, ii_inter_mat = self.get_interaction_uu_ii(uu_weight=0, ii_weight=0) # csr mat; 调整下不同的参数的效果;
+                    uu_inter_ppr_mat, uu_inter_ppr_sp_mat =  self.cal_ppr_common(uu_inter_mat) # good results.
+                    # uu_inter_ppr_mat = uu_inter_ppr_mat.toarray()
+                    self.interaction_cluster_emb = self.sampleTopkUsersKeepOriFromInteractionUUMat(self.rec_user_embeddings, top_k=10, social_ppr_mat=uu_inter_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2)
                 
         if self.rec_loss_aug_w != 0.0:
             # add dropout edged grpahs
@@ -989,7 +1014,13 @@ class SEPTV2(SocialRecommender, GraphRecommender):
 
         if self.ppr_rate != 0.0:
             # 1. add social-based ppr loss
-            self.social_ppr_loss = self.ppr_rate * tf.losses.mean_squared_error(self.social_ppr_mat, self.user_user_sim)
+            # self.social_ppr_loss = self.ppr_rate * tf.losses.mean_squared_error(self.social_ppr_mat, self.user_user_sim)
+            loss_list = []
+            for ppr_score, user_sim in zip(self.social_ppr_sub_tensor_list, self.rec_user_user_sim_list):
+                loss_list.append(tf.reduce_sum(tf.losses.mean_squared_error(ppr_score, user_sim, reduction=tf.losses.Reduction.NONE), axis=-1))
+            # pdb.set_trace()
+            self.social_ppr_loss = self.ppr_rate * tf.reduce_sum(tf.concat(loss_list, axis=0))/(self.num_users * self.num_users)
+            # self.social_ppr_loss = self.ppr_rate * tf.losses.mean_squared_error(self.social_ppr_mat, self.user_user_sim)
             loss += self.social_ppr_loss # ppr is good;
 
         if self.s_cl_rate != 0.0:
@@ -1063,7 +1094,8 @@ class SEPTV2(SocialRecommender, GraphRecommender):
         self.sess.run(init)
         for epoch in range(self.maxEpoch):
             #joint learning
-            if epoch > self.maxEpoch / 3: #need ?
+            # if epoch > self.maxEpoch / 3: #need ?
+            if epoch > -1: #need ?
             # if epoch > -1: #need ?
             # if epoch > -1:
                 #pdb.set_trace()

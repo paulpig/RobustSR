@@ -19,14 +19,14 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 We have transplated QRec from py2 to py3. But we found that, with py3, SEPT achieves higher NDCG
 but lower (slightly) Prec and Recall compared with the results reported in the paper.
 '''
-class SEPTV2(SocialRecommender, GraphRecommender):
+class SEPTV2_douban_v2(SocialRecommender, GraphRecommender):
     def __init__(self, conf, trainingSet=None, testSet=None, relation=None, fold='[1]'):
         GraphRecommender.__init__(self, conf=conf, trainingSet=trainingSet, testSet=testSet, fold=fold)
         SocialRecommender.__init__(self, conf=conf, trainingSet=trainingSet, testSet=testSet, relation=relation,fold=fold)
 
     def readConfiguration(self):
-        super(SEPTV2, self).readConfiguration()
-        args = config.OptionConf(self.config['SEPTV2'])
+        super(SEPTV2_douban_v2, self).readConfiguration()
+        args = config.OptionConf(self.config['SEPTV2_douban_v2'])
         self.n_layers = int(args['-n_layer'])
         self.ss_rate = float(args['-ss_rate'])
         self.drop_rate = float(args['-drop_rate'])
@@ -192,8 +192,8 @@ class SEPTV2(SocialRecommender, GraphRecommender):
         # social_mat = sp.csr_matrix((relations, (s_row_idx + s_col_idx, s_col_idx + s_row_idx)), shape=(n_nodes, n_nodes))
 
         #bidirection
-        # if bidirectional == True:
-        #     social_mat_v1 = social_mat.multiply(social_mat.T)
+        if bidirectional == True:
+            social_mat = social_mat.multiply(social_mat.T)
         #     pdb.set_trace()
         adj = social_mat.tocoo()
         # c = 0.15
@@ -661,7 +661,7 @@ class SEPTV2(SocialRecommender, GraphRecommender):
         return ss_labels
 
     def initModel(self):
-        super(SEPTV2, self).initModel()
+        super(SEPTV2_douban_v2, self).initModel()
         self.neg_idx = tf.placeholder(tf.int32, name="neg_holder")
         self._create_variable()
         self.bs_matrix = self.get_birectional_social_matrix()
@@ -760,7 +760,8 @@ class SEPTV2(SocialRecommender, GraphRecommender):
 
         if self.ppr_rate != 0.0:
             # add social-based ppr mat
-            social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat()
+            social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat() # unidirection
+            # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(bidirectional=True) # bidirectional
 
             # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type='hk', weight=0.7)
             # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type='origin')
@@ -956,9 +957,9 @@ class SEPTV2(SocialRecommender, GraphRecommender):
     def trainModel(self):
         # training the recommendation model, sept source code;
         rec_loss = bpr_loss(self.batch_user_emb, self.batch_pos_item_emb, self.batch_neg_item_emb)
-        # rec_loss += self.regU * (tf.nn.l2_loss(self.user_embeddings) + tf.nn.l2_loss(self.item_embeddings))
-        rec_loss += self.regU * (tf.nn.l2_loss(self.batch_user_emb) + tf.nn.l2_loss(self.batch_pos_item_emb) + tf.nn.l2_loss(
-                self.batch_neg_item_emb)) #与Lightgcn对齐.
+        rec_loss += self.regU * (tf.nn.l2_loss(self.user_embeddings) + tf.nn.l2_loss(self.item_embeddings))
+        # rec_loss += self.regU * (tf.nn.l2_loss(self.batch_user_emb) + tf.nn.l2_loss(self.batch_pos_item_emb) + tf.nn.l2_loss(
+                # self.batch_neg_item_emb)) #与Lightgcn对齐.
 
         reg_loss = self.regU * (tf.nn.l2_loss(self.batch_user_emb) + tf.nn.l2_loss(self.batch_pos_item_emb) + tf.nn.l2_loss(
                 self.batch_neg_item_emb)) #与Lightgcn对齐.
@@ -1057,6 +1058,8 @@ class SEPTV2(SocialRecommender, GraphRecommender):
         # pdb.set_trace()
         v1_opt = tf.train.AdamOptimizer(self.lRate)
         v1_op = v1_opt.minimize(rec_loss)
+        # v2_opt = tf.train.AdamOptimizer(self.lRate/20.0)
+        # v2_opt = tf.train.AdamOptimizer(self.lRate/5.0)
         v2_opt = tf.train.AdamOptimizer(self.lRate)
         v2_op = v2_opt.minimize(loss)
         init = tf.global_variables_initializer()

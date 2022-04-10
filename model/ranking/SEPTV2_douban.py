@@ -19,14 +19,14 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 We have transplated QRec from py2 to py3. But we found that, with py3, SEPT achieves higher NDCG
 but lower (slightly) Prec and Recall compared with the results reported in the paper.
 '''
-class SEPTV2(SocialRecommender, GraphRecommender):
+class SEPTV2_douban(SocialRecommender, GraphRecommender):
     def __init__(self, conf, trainingSet=None, testSet=None, relation=None, fold='[1]'):
         GraphRecommender.__init__(self, conf=conf, trainingSet=trainingSet, testSet=testSet, fold=fold)
         SocialRecommender.__init__(self, conf=conf, trainingSet=trainingSet, testSet=testSet, relation=relation,fold=fold)
 
     def readConfiguration(self):
-        super(SEPTV2, self).readConfiguration()
-        args = config.OptionConf(self.config['SEPTV2'])
+        super(SEPTV2_douban, self).readConfiguration()
+        args = config.OptionConf(self.config['SEPTV2_douban'])
         self.n_layers = int(args['-n_layer'])
         self.ss_rate = float(args['-ss_rate'])
         self.drop_rate = float(args['-drop_rate'])
@@ -190,11 +190,11 @@ class SEPTV2(SocialRecommender, GraphRecommender):
         relations = np.ones_like(s_row_idx, dtype=np.float32)
         social_mat = sp.csr_matrix((relations, (s_row_idx, s_col_idx)), shape=(n_nodes, n_nodes)) #social 对称的.
         # social_mat = sp.csr_matrix((relations, (s_row_idx + s_col_idx, s_col_idx + s_row_idx)), shape=(n_nodes, n_nodes))
-
+        # pdb.set_trace()
         #bidirection
-        # if bidirectional == True:
-        #     social_mat_v1 = social_mat.multiply(social_mat.T)
-        #     pdb.set_trace()
+        if bidirectional == True:
+            social_mat = social_mat.multiply(social_mat.T)
+            # pdb.set_trace()
         adj = social_mat.tocoo()
         # c = 0.15
         if type_enc == "ppr":
@@ -661,7 +661,7 @@ class SEPTV2(SocialRecommender, GraphRecommender):
         return ss_labels
 
     def initModel(self):
-        super(SEPTV2, self).initModel()
+        super(SEPTV2_douban, self).initModel()
         self.neg_idx = tf.placeholder(tf.int32, name="neg_holder")
         self._create_variable()
         self.bs_matrix = self.get_birectional_social_matrix()
@@ -760,7 +760,8 @@ class SEPTV2(SocialRecommender, GraphRecommender):
 
         if self.ppr_rate != 0.0:
             # add social-based ppr mat
-            social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat()
+            # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(bidirectional=False)
+            social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(bidirectional=True)
 
             # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type='hk', weight=0.7)
             # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type='origin')
@@ -806,12 +807,13 @@ class SEPTV2(SocialRecommender, GraphRecommender):
             elif self.cluster_type == 6:
                 self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(self.rec_user_embeddings, top_k=10, social_ppr_mat=social_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2) #目前的sota.
                 # add interactioin uu cluster emb
-                self.inter_flag = True
+                # self.inter_flag = True
+                # self.inter_flag = False
                 # todo
-                uu_inter_mat, ii_inter_mat = self.get_interaction_uu_ii(uu_weight=0, ii_weight=0) # csr mat; 调整下不同的参数的效果;
-                uu_inter_ppr_mat, uu_inter_ppr_sp_mat =  self.cal_ppr_common(uu_inter_mat) # good results.
+                # uu_inter_mat, ii_inter_mat = self.get_interaction_uu_ii(uu_weight=0, ii_weight=0) # csr mat; 调整下不同的参数的效果;
+                # uu_inter_ppr_mat, uu_inter_ppr_sp_mat =  self.cal_ppr_common(uu_inter_mat) # good results.
                 # uu_inter_ppr_mat = uu_inter_ppr_mat.toarray()
-                self.interaction_cluster_emb = self.sampleTopkUsersKeepOriFromInteractionUUMat(self.rec_user_embeddings, top_k=10, social_ppr_mat=uu_inter_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2)
+                # self.interaction_cluster_emb = self.sampleTopkUsersKeepOriFromInteractionUUMat(self.rec_user_embeddings, top_k=10, social_ppr_mat=uu_inter_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2)
                 
         if self.rec_loss_aug_w != 0.0:
             # add dropout edged grpahs
@@ -1010,8 +1012,8 @@ class SEPTV2(SocialRecommender, GraphRecommender):
                 # self.social_ppr_cluster_loss += self.social_ppr_cluster_w * self.ssl_layer_loss(self.rec_item_embeddings, self.item_ppr_cluster_emb)
                 # self.socail_ppr_cluster_hinge_loss = self.social_ppr_cluster_w * self.hinge_cl_loss(self.user_embeddings, self.social_ppr_cluster_emb)
                 # loss += self.social_ppr_cluster_w * self.social_ppr_cluster_loss
-                if self.inter_flag == True:
-                    self.social_ppr_cluster_loss += self.social_ppr_cluster_w * self.ssl_layer_loss(self.rec_user_embeddings, self.interaction_cluster_emb)
+                #if self.inter_flag == True:
+                #    self.social_ppr_cluster_loss += self.social_ppr_cluster_w * self.ssl_layer_loss(self.rec_user_embeddings, self.interaction_cluster_emb)
             
             elif self.cluster_type == 2:
                 self.social_ppr_cluster_loss = self.social_ppr_cluster_w * self.ssl_layer_both_item_loss(self.edgo_ppr_cluster_emb, self.social_ppr_cluster_emb)
@@ -1063,8 +1065,8 @@ class SEPTV2(SocialRecommender, GraphRecommender):
         self.sess.run(init)
         for epoch in range(self.maxEpoch):
             #joint learning
-            if epoch > self.maxEpoch / 3: #need ?
-            # if epoch > -1: #need ?
+            # if epoch > self.maxEpoch / 3: #need ?/
+            if epoch > -1: #need ?
             # if epoch > -1:
                 #pdb.set_trace()
                 sub_mat = {}

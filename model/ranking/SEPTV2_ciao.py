@@ -19,14 +19,14 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 We have transplated QRec from py2 to py3. But we found that, with py3, SEPT achieves higher NDCG
 but lower (slightly) Prec and Recall compared with the results reported in the paper.
 '''
-class SEPTV2(SocialRecommender, GraphRecommender):
+class SEPTV2_ciao(SocialRecommender, GraphRecommender):
     def __init__(self, conf, trainingSet=None, testSet=None, relation=None, fold='[1]'):
         GraphRecommender.__init__(self, conf=conf, trainingSet=trainingSet, testSet=testSet, fold=fold)
         SocialRecommender.__init__(self, conf=conf, trainingSet=trainingSet, testSet=testSet, relation=relation,fold=fold)
 
     def readConfiguration(self):
-        super(SEPTV2, self).readConfiguration()
-        args = config.OptionConf(self.config['SEPTV2'])
+        super(SEPTV2_ciao, self).readConfiguration()
+        args = config.OptionConf(self.config['SEPTV2_ciao'])
         self.n_layers = int(args['-n_layer'])
         self.ss_rate = float(args['-ss_rate'])
         self.drop_rate = float(args['-drop_rate'])
@@ -661,7 +661,7 @@ class SEPTV2(SocialRecommender, GraphRecommender):
         return ss_labels
 
     def initModel(self):
-        super(SEPTV2, self).initModel()
+        super(SEPTV2_ciao, self).initModel()
         self.neg_idx = tf.placeholder(tf.int32, name="neg_holder")
         self._create_variable()
         self.bs_matrix = self.get_birectional_social_matrix()
@@ -806,12 +806,13 @@ class SEPTV2(SocialRecommender, GraphRecommender):
             elif self.cluster_type == 6:
                 self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(self.rec_user_embeddings, top_k=10, social_ppr_mat=social_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2) #目前的sota.
                 # add interactioin uu cluster emb
-                self.inter_flag = True
+                # self.inter_flag = True
+                self.inter_flag = False
                 # todo
-                uu_inter_mat, ii_inter_mat = self.get_interaction_uu_ii(uu_weight=0, ii_weight=0) # csr mat; 调整下不同的参数的效果;
-                uu_inter_ppr_mat, uu_inter_ppr_sp_mat =  self.cal_ppr_common(uu_inter_mat) # good results.
-                # uu_inter_ppr_mat = uu_inter_ppr_mat.toarray()
-                self.interaction_cluster_emb = self.sampleTopkUsersKeepOriFromInteractionUUMat(self.rec_user_embeddings, top_k=10, social_ppr_mat=uu_inter_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2)
+                # uu_inter_mat, ii_inter_mat = self.get_interaction_uu_ii(uu_weight=0, ii_weight=0) # csr mat; 调整下不同的参数的效果;
+                # uu_inter_ppr_mat, uu_inter_ppr_sp_mat =  self.cal_ppr_common(uu_inter_mat) # good results.
+                # # uu_inter_ppr_mat = uu_inter_ppr_mat.toarray()
+                # self.interaction_cluster_emb = self.sampleTopkUsersKeepOriFromInteractionUUMat(self.rec_user_embeddings, top_k=10, social_ppr_mat=uu_inter_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2)
                 
         if self.rec_loss_aug_w != 0.0:
             # add dropout edged grpahs

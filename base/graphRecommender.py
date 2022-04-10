@@ -2,6 +2,7 @@ from base.deepRecommender import DeepRecommender
 import numpy as np
 import scipy.sparse as sp
 import tensorflow as tf
+import pdb
 
 """
 Generate sparse adjaceny.
@@ -36,6 +37,7 @@ class GraphRecommender(DeepRecommender):
         return a sparse tensor with the shape (user number + item number, user number + item number)
         '''
         norm_adj = self.create_joint_sparse_adjaceny()
+        # pdb.set_trace()
         row,col = norm_adj.nonzero()
         indices = np.array(list(zip(row,col)))
         adj_tensor = tf.SparseTensor(indices=indices, values=norm_adj.data, dense_shape=norm_adj.shape)
