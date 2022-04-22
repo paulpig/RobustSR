@@ -761,6 +761,7 @@ class SEPTV2_ciao(SocialRecommender, GraphRecommender):
         if self.ppr_rate != 0.0:
             # add social-based ppr mat
             social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat()
+            # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(weight=0.3)
 
             # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type='hk', weight=0.7)
             # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type='origin')
@@ -768,6 +769,13 @@ class SEPTV2_ciao(SocialRecommender, GraphRecommender):
             # social_mat = tf.sparse.to_dense(social_mat)
             self.social_ppr_mat = tf.convert_to_tensor(social_ppr_mat, dtype=tf.float32) #(userNum, userNum)
             self.user_user_sim = tf.matmul(self.rec_user_embeddings, tf.transpose(self.rec_user_embeddings, perm=[1, 0])) #(userNum, userNum)
+
+            sim_type = 'cos'
+            if sim_type == 'cos':
+                tensor1_norm = tf.reshape(tf.sqrt(tf.reduce_sum(tf.math.square(self.rec_user_embeddings), axis=-1)), [1, -1])
+                tensor2_norm = tf.reshape(tf.sqrt(tf.reduce_sum(tf.math.square(self.rec_user_embeddings), axis=-1)), [-1, 1])
+                self.user_user_sim = self.user_user_sim / (tensor1_norm * tensor2_norm)
+                # tensor2_norm = tf.sqrt(tf.reduce_sum(tf.square(tensor2)))
         # pdb.set_trace()
 
         if self.s_cl_rate != 0.0:
@@ -804,6 +812,7 @@ class SEPTV2_ciao(SocialRecommender, GraphRecommender):
                 self.social_ppr_cluster_emb = self.sampleTopkUsers(self.rec_user_embeddings, top_k=10) # context embedding. not good. 模型是有效的, 说明聚合操作可以深挖; how to cluster users? 通过graph partition得到每个节点的标签, 根据标签得到聚合表征;
                 self.social_global_cluster_emb = tf.tile(tf.expand_dims(tf.reduce_sum(self.social_ppr_cluster_emb, axis=0), 0), [self.num_users,1]) # [num_user, dim]
             elif self.cluster_type == 6:
+                # self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(self.rec_user_embeddings, top_k=15, social_ppr_mat=social_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2) #目前的sota.
                 self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(self.rec_user_embeddings, top_k=10, social_ppr_mat=social_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2) #目前的sota.
                 # add interactioin uu cluster emb
                 # self.inter_flag = True

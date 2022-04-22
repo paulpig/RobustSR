@@ -53,7 +53,7 @@ class SEPTV2_douban_v2(SocialRecommender, GraphRecommender):
         ratingMatrix = coo_matrix((entries, (row, col)), shape=(self.num_users, self.num_items), dtype=np.float32)
         return ratingMatrix
 
-    def get_birectional_social_matrix(self):
+    def get_birectional_social_matrix(self, bidirection=False):
         row_idx = [self.data.user[pair[0]] for pair in self.social.relation]
         col_idx = [self.data.user[pair[1]] for pair in self.social.relation]
         follower_np = np.array(row_idx)
@@ -61,7 +61,11 @@ class SEPTV2_douban_v2(SocialRecommender, GraphRecommender):
         relations = np.ones_like(follower_np, dtype=np.float32)
         tmp_adj = sp.csr_matrix((relations, (follower_np, followee_np)), shape=(self.num_users, self.num_users))
         # pdb.set_trace()
-        adj_mat = tmp_adj.multiply(tmp_adj)
+        # adj_mat = tmp_adj.multiply(tmp_adj)
+        if bidirection == True:
+            adj_mat = tmp_adj.multiply(tmp_adj.T)
+        else:
+            adj_mat = tmp_adj
         return adj_mat
     
     def get_birectional_social_matrix_v2(self):
@@ -664,7 +668,7 @@ class SEPTV2_douban_v2(SocialRecommender, GraphRecommender):
         super(SEPTV2_douban_v2, self).initModel()
         self.neg_idx = tf.placeholder(tf.int32, name="neg_holder")
         self._create_variable()
-        self.bs_matrix = self.get_birectional_social_matrix()
+        self.bs_matrix = self.get_birectional_social_matrix(bidirection=True)
         self.rating_mat = self.buildSparseRatingMatrix()
         social_mat, sharing_mat = self.get_social_related_views(self.bs_matrix, self.rating_mat)
         social_mat = self._convert_sp_mat_to_sp_tensor(social_mat)
@@ -760,26 +764,15 @@ class SEPTV2_douban_v2(SocialRecommender, GraphRecommender):
 
         if self.ppr_rate != 0.0:
             # add social-based ppr mat
-            social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat() # unidirection
-            # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(bidirectional=True) # bidirectional
+            # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat() # unidirection
+            social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(bidirectional=True) # bidirectional
 
             # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type='hk', weight=0.7)
             # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type='origin')
             # social_mat = self._convert_sp_mat_to_sp_tensor(social_ppr_mat)
             # social_mat = tf.sparse.to_dense(social_mat)
             self.social_ppr_mat = tf.convert_to_tensor(social_ppr_mat, dtype=tf.float32) #(userNum, userNum)
-            
-            # add normalize
-            # user_embeddings_norm = tf.math.l2_normalize(self.rec_user_embeddings,1) #For Douban, normalization is needed.
-            # self.user_user_sim = tf.matmul(user_embeddings_norm, tf.transpose(user_embeddings_norm, perm=[1, 0])) #(userNum, userNum)
             self.user_user_sim = tf.matmul(self.rec_user_embeddings, tf.transpose(self.rec_user_embeddings, perm=[1, 0])) #(userNum, userNum)
-
-            # sim_type = 'cos'
-            # if sim_type == 'cos':
-            #     tensor1_norm = tf.reshape(tf.sqrt(tf.reduce_sum(tf.math.square(self.rec_user_embeddings), axis=-1)), [1, -1])
-            #     tensor2_norm = tf.reshape(tf.sqrt(tf.reduce_sum(tf.math.square(self.rec_user_embeddings), axis=-1)), [-1, 1])
-            #     self.user_user_sim = self.user_user_sim / (tensor1_norm * tensor2_norm)
-
         # pdb.set_trace()
 
         if self.s_cl_rate != 0.0:
@@ -816,16 +809,14 @@ class SEPTV2_douban_v2(SocialRecommender, GraphRecommender):
                 self.social_ppr_cluster_emb = self.sampleTopkUsers(self.rec_user_embeddings, top_k=10) # context embedding. not good. 模型是有效的, 说明聚合操作可以深挖; how to cluster users? 通过graph partition得到每个节点的标签, 根据标签得到聚合表征;
                 self.social_global_cluster_emb = tf.tile(tf.expand_dims(tf.reduce_sum(self.social_ppr_cluster_emb, axis=0), 0), [self.num_users,1]) # [num_user, dim]
             elif self.cluster_type == 6:
-                # rec_user_embeddings_norm = tf.math.l2_normalize(self.rec_user_embeddings,1)
-                # self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(rec_user_embeddings_norm, top_k=10, social_ppr_mat=social_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2) #目前的sota.
                 self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(self.rec_user_embeddings, top_k=10, social_ppr_mat=social_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2) #目前的sota.
                 # add interactioin uu cluster emb
-                self.inter_flag = False
+                self.inter_flag = True
                 # todo
-                # uu_inter_mat, ii_inter_mat = self.get_interaction_uu_ii(uu_weight=0, ii_weight=0) # csr mat; 调整下不同的参数的效果;
-                # uu_inter_ppr_mat, uu_inter_ppr_sp_mat =  self.cal_ppr_common(uu_inter_mat) # good results.
-                # # uu_inter_ppr_mat = uu_inter_ppr_mat.toarray()
-                # self.interaction_cluster_emb = self.sampleTopkUsersKeepOriFromInteractionUUMat(self.rec_user_embeddings, top_k=10, social_ppr_mat=uu_inter_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2)
+                uu_inter_mat, ii_inter_mat = self.get_interaction_uu_ii(uu_weight=0, ii_weight=0) # csr mat; 调整下不同的参数的效果;
+                uu_inter_ppr_mat, uu_inter_ppr_sp_mat =  self.cal_ppr_common(uu_inter_mat) # good results.
+                # uu_inter_ppr_mat = uu_inter_ppr_mat.toarray()
+                self.interaction_cluster_emb = self.sampleTopkUsersKeepOriFromInteractionUUMat(self.rec_user_embeddings, top_k=10, social_ppr_mat=uu_inter_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2)
                 
         if self.rec_loss_aug_w != 0.0:
             # add dropout edged grpahs
@@ -1024,8 +1015,8 @@ class SEPTV2_douban_v2(SocialRecommender, GraphRecommender):
                 # self.social_ppr_cluster_loss += self.social_ppr_cluster_w * self.ssl_layer_loss(self.rec_item_embeddings, self.item_ppr_cluster_emb)
                 # self.socail_ppr_cluster_hinge_loss = self.social_ppr_cluster_w * self.hinge_cl_loss(self.user_embeddings, self.social_ppr_cluster_emb)
                 # loss += self.social_ppr_cluster_w * self.social_ppr_cluster_loss
-                # if self.inter_flag == True:
-                #     self.social_ppr_cluster_loss += self.social_ppr_cluster_w * self.ssl_layer_loss(self.rec_user_embeddings, self.interaction_cluster_emb)
+                if self.inter_flag == True:
+                    self.social_ppr_cluster_loss += self.social_ppr_cluster_w * self.ssl_layer_loss(self.rec_user_embeddings, self.interaction_cluster_emb)
             
             elif self.cluster_type == 2:
                 self.social_ppr_cluster_loss = self.social_ppr_cluster_w * self.ssl_layer_both_item_loss(self.edgo_ppr_cluster_emb, self.social_ppr_cluster_emb)

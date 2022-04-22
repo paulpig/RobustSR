@@ -42,6 +42,7 @@ class SEPTV2_yelp(SocialRecommender, GraphRecommender):
         self.inter_ppr_w = float(args['-inter_ppr_w'])
         self.graph_label_w = float(args['-graph_label_w'])
         self.cluster_type = int(args['-cluster_type']) 
+        self.top_k = int(args['-topk']) 
         # pdb.set_trace()
 
 
@@ -826,17 +827,17 @@ class SEPTV2_yelp(SocialRecommender, GraphRecommender):
                 self.social_ppr_cluster_emb = self.sampleTopkUsers(self.rec_user_embeddings, top_k=10) # context embedding. not good. 模型是有效的, 说明聚合操作可以深挖; how to cluster users? 通过graph partition得到每个节点的标签, 根据标签得到聚合表征;
                 self.social_global_cluster_emb = tf.tile(tf.expand_dims(tf.reduce_sum(self.social_ppr_cluster_emb, axis=0), 0), [self.num_users,1]) # [num_user, dim]
             elif self.cluster_type == 6:
-                self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(self.rec_user_embeddings, top_k=10, social_ppr_mat=social_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2) #目前的sota.
+                self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(self.rec_user_embeddings, top_k=self.top_k, social_ppr_mat=social_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2) #目前的sota.
                 # add interactioin uu cluster emb
                 # self.inter_flag = True
                 self.inter_flag = False
 
-                if self.inter_flag == True:
-                    # todo
-                    uu_inter_mat, ii_inter_mat = self.get_interaction_uu_ii(uu_weight=0, ii_weight=0) # csr mat; 调整下不同的参数的效果;
-                    uu_inter_ppr_mat, uu_inter_ppr_sp_mat =  self.cal_ppr_common(uu_inter_mat) # good results.
-                    # uu_inter_ppr_mat = uu_inter_ppr_mat.toarray()
-                    self.interaction_cluster_emb = self.sampleTopkUsersKeepOriFromInteractionUUMat(self.rec_user_embeddings, top_k=10, social_ppr_mat=uu_inter_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2)
+                # if self.inter_flag == True:
+                #     # todo
+                #     uu_inter_mat, ii_inter_mat = self.get_interaction_uu_ii(uu_weight=0, ii_weight=0) # csr mat; 调整下不同的参数的效果;
+                #     uu_inter_ppr_mat, uu_inter_ppr_sp_mat =  self.cal_ppr_common(uu_inter_mat) # good results.
+                #     # uu_inter_ppr_mat = uu_inter_ppr_mat.toarray()
+                #     self.interaction_cluster_emb = self.sampleTopkUsersKeepOriFromInteractionUUMat(self.rec_user_embeddings, top_k=10, social_ppr_mat=uu_inter_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2)
                 
         if self.rec_loss_aug_w != 0.0:
             # add dropout edged grpahs
@@ -1094,8 +1095,8 @@ class SEPTV2_yelp(SocialRecommender, GraphRecommender):
         self.sess.run(init)
         for epoch in range(self.maxEpoch):
             #joint learning
-            # if epoch > self.maxEpoch / 3: #need ?
-            if epoch > -1: #need ?
+            if epoch > self.maxEpoch / 3: #need ?
+            # if epoch > -1: #need ?
             # if epoch > -1: #need ?
             # if epoch > -1:
                 #pdb.set_trace()

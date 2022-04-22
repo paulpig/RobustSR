@@ -54,7 +54,7 @@ class DiffNet(SocialRecommender,GraphRecommender):
         self.neg_item_embedding = tf.nn.embedding_lookup(self.item_embeddings, self.neg_idx)
         self.u_embedding = tf.nn.embedding_lookup(final_user_embeddings, self.u_idx)
         self.v_embedding = tf.nn.embedding_lookup(self.item_embeddings, self.v_idx)
-        self.test = tf.reduce_sum(tf.multiply(self.u_embedding, self.item_embeddings), 1)
+        # self.test = tf.reduce_sum(tf.multiply(self.u_embedding, self.item_embeddings), 1)
 
         y = tf.reduce_sum(tf.multiply(self.u_embedding, self.v_embedding), 1) \
             - tf.reduce_sum(tf.multiply(self.u_embedding, self.neg_item_embedding), 1)
@@ -69,13 +69,21 @@ class DiffNet(SocialRecommender,GraphRecommender):
             for n, batch in enumerate(self.next_batch_pairwise()):
                 user_idx, i_idx, j_idx = batch
                 _, l = self.sess.run([train, loss],
-                                     feed_dict={self.u_idx: user_idx, self.neg_idx: j_idx, self.v_idx: i_idx})
+                                    feed_dict={self.u_idx: user_idx, self.neg_idx: j_idx, self.v_idx: i_idx})
                 print('training:', epoch + 1, 'batch', n, 'loss:', l)
+                self.U, self.V = self.sess.run([self.u_embedding, self.v_embedding],
+                                    feed_dict={self.u_idx: user_idx, self.neg_idx: j_idx, self.v_idx: i_idx})
+            self.ranking_performance(epoch)
+        self.U,self.V = self.bestU,self.bestV
+
+    # def saveModel(self):
+    #     self.bestU, self.bestV = self.sess.run([self.u_embedding, self.v_embedding])
 
     def predictForRanking(self, u):
         'invoked to rank all the items for the user'
         if self.data.containsUser(u):
             u = self.data.getUserId(u)
-            return self.sess.run(self.test,feed_dict={self.u_idx:u})
+            # return self.sess.run(self.test,feed_dict={self.u_idx:u})
+            return self.V.dot(self.U[u])
         else:
             return [self.data.globalMean] * self.num_items

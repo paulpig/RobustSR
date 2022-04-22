@@ -19,14 +19,14 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 We have transplated QRec from py2 to py3. But we found that, with py3, SEPT achieves higher NDCG
 but lower (slightly) Prec and Recall compared with the results reported in the paper.
 '''
-class SEPTV2_douban_v2(SocialRecommender, GraphRecommender):
+class SEPTV2_lastfm_other(SocialRecommender, GraphRecommender):
     def __init__(self, conf, trainingSet=None, testSet=None, relation=None, fold='[1]'):
         GraphRecommender.__init__(self, conf=conf, trainingSet=trainingSet, testSet=testSet, fold=fold)
         SocialRecommender.__init__(self, conf=conf, trainingSet=trainingSet, testSet=testSet, relation=relation,fold=fold)
 
     def readConfiguration(self):
-        super(SEPTV2_douban_v2, self).readConfiguration()
-        args = config.OptionConf(self.config['SEPTV2_douban_v2'])
+        super(SEPTV2_lastfm_other, self).readConfiguration()
+        args = config.OptionConf(self.config['SEPTV2_lastfm_other'])
         self.n_layers = int(args['-n_layer'])
         self.ss_rate = float(args['-ss_rate'])
         self.drop_rate = float(args['-drop_rate'])
@@ -192,8 +192,8 @@ class SEPTV2_douban_v2(SocialRecommender, GraphRecommender):
         # social_mat = sp.csr_matrix((relations, (s_row_idx + s_col_idx, s_col_idx + s_row_idx)), shape=(n_nodes, n_nodes))
 
         #bidirection
-        if bidirectional == True:
-            social_mat = social_mat.multiply(social_mat.T)
+        # if bidirectional == True:
+        #     social_mat_v1 = social_mat.multiply(social_mat.T)
         #     pdb.set_trace()
         adj = social_mat.tocoo()
         # c = 0.15
@@ -463,6 +463,66 @@ class SEPTV2_douban_v2(SocialRecommender, GraphRecommender):
         # pdb.set_trace()
         return subgraph_emb
 
+    
+    def sampleTopkUsersKeepOriV2(self, userEmbedding, top_k=10, social_ppr_mat=None, mask_ori=False, add_norm=True, add_self=True, social_layer_num=1):
+        """
+        self.bs_matrix: csr mat
+        social_ppr_mat: array
+        return 
+            (user_num, dim)
+        """
+        bs_matrix = self.bs_matrix.toarray()
+        indices = np.argsort(social_ppr_mat, axis=-1)[:,-top_k:] #(user_num, top k)
+
+        user_index = np.arange(self.num_users).reshape(self.num_users, 1)
+        user_index = np.tile(user_index, top_k).reshape(1, -1)
+
+        # pdb.set_trace()
+        # b = np.array([[0, 3], [0, 9], [0, 5]]).reshape(1, -1)
+        indices = indices.reshape(1, -1)
+        indices = np.concatenate([user_index, indices], axis=0).tolist()
+        # a = [[1,2,3], [4,5,6]]
+        ppr_mask_mat = np.zeros_like(social_ppr_mat)
+        ppr_mask_mat[indices] = 1
+
+        if mask_ori:
+            # true neighbors, mask origin social graph.
+            ppr_mask_mat = ppr_mask_mat * bs_matrix 
+
+        if add_norm:
+            # calculat norm weights
+            rowsum = np.array(ppr_mask_mat.sum(1))
+            d_inv = np.power(rowsum, -0.5).flatten()
+            d_inv[np.isinf(d_inv)] = 0.
+            d_mat_inv = sp.diags(d_inv)
+            norm_adj_tmp = d_mat_inv.dot(ppr_mask_mat)
+            norm_adj_tmp = norm_adj_tmp.dot(d_mat_inv)
+        else:
+            norm_adj_tmp = np.array(ppr_mask_mat)
+
+        # gcn, 多层
+        # pdb.set_trace()
+        norm_adj_tmp = sp.csr_matrix(norm_adj_tmp)
+        socail_ppr_mat = self._convert_sp_mat_to_sp_tensor(norm_adj_tmp)
+
+        # userEmbedding = userEmbedding * tf.nn.sigmoid(tf.layers.dense(inputs=userEmbedding, units=self.emb_size, activation=None))
+        userEmbedding = userEmbedding
+
+        if add_self==True:
+            all_social_embeddings_global = [userEmbedding]
+        else:
+            all_social_embeddings_global = []
+
+        # for k in range(self.n_layers):
+        for k in range(social_layer_num):
+            # friend view, local
+            friend_view_embeddings_local = tf.sparse_tensor_dense_matmul(socail_ppr_mat, userEmbedding)
+            norm_embeddings = tf.math.l2_normalize(friend_view_embeddings_local, axis=1)
+            all_social_embeddings_global += [norm_embeddings]
+        
+        subgraph_emb = tf.reduce_sum(all_social_embeddings_global, axis=0)
+        return subgraph_emb
+
 
     def sampleTopkUsersKeepOriFromInteraction(self, userEmbedding, top_k=10, social_ppr_mat=None, mask_ori=False, add_norm=True, add_self=True, social_layer_num=1):
         """
@@ -661,7 +721,7 @@ class SEPTV2_douban_v2(SocialRecommender, GraphRecommender):
         return ss_labels
 
     def initModel(self):
-        super(SEPTV2_douban_v2, self).initModel()
+        super(SEPTV2_lastfm_other, self).initModel()
         self.neg_idx = tf.placeholder(tf.int32, name="neg_holder")
         self._create_variable()
         self.bs_matrix = self.get_birectional_social_matrix()
@@ -760,26 +820,14 @@ class SEPTV2_douban_v2(SocialRecommender, GraphRecommender):
 
         if self.ppr_rate != 0.0:
             # add social-based ppr mat
-            social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat() # unidirection
-            # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(bidirectional=True) # bidirectional
+            social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat()
 
             # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type='hk', weight=0.7)
             # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type='origin')
             # social_mat = self._convert_sp_mat_to_sp_tensor(social_ppr_mat)
             # social_mat = tf.sparse.to_dense(social_mat)
             self.social_ppr_mat = tf.convert_to_tensor(social_ppr_mat, dtype=tf.float32) #(userNum, userNum)
-            
-            # add normalize
-            # user_embeddings_norm = tf.math.l2_normalize(self.rec_user_embeddings,1) #For Douban, normalization is needed.
-            # self.user_user_sim = tf.matmul(user_embeddings_norm, tf.transpose(user_embeddings_norm, perm=[1, 0])) #(userNum, userNum)
             self.user_user_sim = tf.matmul(self.rec_user_embeddings, tf.transpose(self.rec_user_embeddings, perm=[1, 0])) #(userNum, userNum)
-
-            # sim_type = 'cos'
-            # if sim_type == 'cos':
-            #     tensor1_norm = tf.reshape(tf.sqrt(tf.reduce_sum(tf.math.square(self.rec_user_embeddings), axis=-1)), [1, -1])
-            #     tensor2_norm = tf.reshape(tf.sqrt(tf.reduce_sum(tf.math.square(self.rec_user_embeddings), axis=-1)), [-1, 1])
-            #     self.user_user_sim = self.user_user_sim / (tensor1_norm * tensor2_norm)
-
         # pdb.set_trace()
 
         if self.s_cl_rate != 0.0:
@@ -804,7 +852,7 @@ class SEPTV2_douban_v2(SocialRecommender, GraphRecommender):
                 # self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(self.rec_user_embeddings, top_k=10, mask_ori=True, social_ppr_mat=social_ppr_mat, add_norm=True) # best result
                 # self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(self.rec_user_embeddings, top_k=10, social_ppr_mat=social_ppr_mat, mask_ori=True,  add_norm=True, add_self=False)
                 self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(self.rec_user_embeddings, top_k=10, social_ppr_mat=social_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2) #目前的sota.
-                self.inter_flag = True
+                self.inter_flag = False
                 if self.inter_flag == True:
                     self.interaction_cluster_emb = self.sampleTopkUsersKeepOriFromInteraction(self.rec_user_embeddings, top_k=10, social_ppr_mat=None, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2)
                     # self.interaction_cluster_emb = self.sampleTopkUsersKeepOriFromInteraction(self.rec_user_embeddings, top_k=10, social_ppr_mat=None, mask_ori=True, add_norm=False, add_self=True, social_layer_num=2)
@@ -816,16 +864,14 @@ class SEPTV2_douban_v2(SocialRecommender, GraphRecommender):
                 self.social_ppr_cluster_emb = self.sampleTopkUsers(self.rec_user_embeddings, top_k=10) # context embedding. not good. 模型是有效的, 说明聚合操作可以深挖; how to cluster users? 通过graph partition得到每个节点的标签, 根据标签得到聚合表征;
                 self.social_global_cluster_emb = tf.tile(tf.expand_dims(tf.reduce_sum(self.social_ppr_cluster_emb, axis=0), 0), [self.num_users,1]) # [num_user, dim]
             elif self.cluster_type == 6:
-                # rec_user_embeddings_norm = tf.math.l2_normalize(self.rec_user_embeddings,1)
-                # self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(rec_user_embeddings_norm, top_k=10, social_ppr_mat=social_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2) #目前的sota.
                 self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(self.rec_user_embeddings, top_k=10, social_ppr_mat=social_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2) #目前的sota.
                 # add interactioin uu cluster emb
-                self.inter_flag = False
+                self.inter_flag = True
                 # todo
-                # uu_inter_mat, ii_inter_mat = self.get_interaction_uu_ii(uu_weight=0, ii_weight=0) # csr mat; 调整下不同的参数的效果;
-                # uu_inter_ppr_mat, uu_inter_ppr_sp_mat =  self.cal_ppr_common(uu_inter_mat) # good results.
-                # # uu_inter_ppr_mat = uu_inter_ppr_mat.toarray()
-                # self.interaction_cluster_emb = self.sampleTopkUsersKeepOriFromInteractionUUMat(self.rec_user_embeddings, top_k=10, social_ppr_mat=uu_inter_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2)
+                uu_inter_mat, ii_inter_mat = self.get_interaction_uu_ii(uu_weight=0, ii_weight=0) # csr mat; 调整下不同的参数的效果;
+                uu_inter_ppr_mat, uu_inter_ppr_sp_mat =  self.cal_ppr_common(uu_inter_mat) # good results.
+                # uu_inter_ppr_mat = uu_inter_ppr_mat.toarray()
+                self.interaction_cluster_emb = self.sampleTopkUsersKeepOriFromInteractionUUMat(self.rec_user_embeddings, top_k=10, social_ppr_mat=uu_inter_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2)
                 
         if self.rec_loss_aug_w != 0.0:
             # add dropout edged grpahs
@@ -970,9 +1016,9 @@ class SEPTV2_douban_v2(SocialRecommender, GraphRecommender):
     def trainModel(self):
         # training the recommendation model, sept source code;
         rec_loss = bpr_loss(self.batch_user_emb, self.batch_pos_item_emb, self.batch_neg_item_emb)
-        rec_loss += self.regU * (tf.nn.l2_loss(self.user_embeddings) + tf.nn.l2_loss(self.item_embeddings))
-        # rec_loss += self.regU * (tf.nn.l2_loss(self.batch_user_emb) + tf.nn.l2_loss(self.batch_pos_item_emb) + tf.nn.l2_loss(
-                # self.batch_neg_item_emb)) #与Lightgcn对齐.
+        # rec_loss += self.regU * (tf.nn.l2_loss(self.user_embeddings) + tf.nn.l2_loss(self.item_embeddings))
+        rec_loss += self.regU * (tf.nn.l2_loss(self.batch_user_emb) + tf.nn.l2_loss(self.batch_pos_item_emb) + tf.nn.l2_loss(
+                self.batch_neg_item_emb)) #与Lightgcn对齐.
 
         reg_loss = self.regU * (tf.nn.l2_loss(self.batch_user_emb) + tf.nn.l2_loss(self.batch_pos_item_emb) + tf.nn.l2_loss(
                 self.batch_neg_item_emb)) #与Lightgcn对齐.
@@ -1024,8 +1070,8 @@ class SEPTV2_douban_v2(SocialRecommender, GraphRecommender):
                 # self.social_ppr_cluster_loss += self.social_ppr_cluster_w * self.ssl_layer_loss(self.rec_item_embeddings, self.item_ppr_cluster_emb)
                 # self.socail_ppr_cluster_hinge_loss = self.social_ppr_cluster_w * self.hinge_cl_loss(self.user_embeddings, self.social_ppr_cluster_emb)
                 # loss += self.social_ppr_cluster_w * self.social_ppr_cluster_loss
-                # if self.inter_flag == True:
-                #     self.social_ppr_cluster_loss += self.social_ppr_cluster_w * self.ssl_layer_loss(self.rec_user_embeddings, self.interaction_cluster_emb)
+                if self.inter_flag == True:
+                    self.social_ppr_cluster_loss += self.social_ppr_cluster_w * self.ssl_layer_loss(self.rec_user_embeddings, self.interaction_cluster_emb)
             
             elif self.cluster_type == 2:
                 self.social_ppr_cluster_loss = self.social_ppr_cluster_w * self.ssl_layer_both_item_loss(self.edgo_ppr_cluster_emb, self.social_ppr_cluster_emb)
@@ -1071,8 +1117,6 @@ class SEPTV2_douban_v2(SocialRecommender, GraphRecommender):
         # pdb.set_trace()
         v1_opt = tf.train.AdamOptimizer(self.lRate)
         v1_op = v1_opt.minimize(rec_loss)
-        # v2_opt = tf.train.AdamOptimizer(self.lRate/20.0)
-        # v2_opt = tf.train.AdamOptimizer(self.lRate/5.0)
         v2_opt = tf.train.AdamOptimizer(self.lRate)
         v2_op = v2_opt.minimize(loss)
         init = tf.global_variables_initializer()
