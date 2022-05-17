@@ -8,6 +8,8 @@ import os
 from util import config
 from math import sqrt
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+import numpy as np
+import pickle
 
 # Recommended Maximum Epoch Setting: LastFM 120 Douban 30 Yelp 30
 # A slight performance drop is observed when we transplanted the model from python2 to python3. The cause is unclear.
@@ -224,9 +226,20 @@ class MHCN(SocialRecommender,GraphRecommender):
                                      feed_dict={self.u_idx: user_idx, self.neg_idx: j_idx, self.v_idx: i_idx})
                 print(self.foldInfo,'training:', epoch + 1, 'batch', n, 'rec loss:', l1)#,'ss_loss',l2
             self.U, self.V = self.sess.run([self.final_user_embeddings, self.final_item_embeddings])
-            self.ranking_performance(epoch)
+            if epoch % 2 == 0 or epoch == (self.maxEpoch - 1):
+                self.ranking_performance(epoch)
     #self.U, self.V = self.sess.run([self.main_user_embeddings, self.main_item_embeddings])
         self.U,self.V = self.bestU,self.bestV
+
+        # model_name = "MHCN"
+        # np.save('./exp/lastfm/{}/user_emb'.format(model_name), self.U)
+        # np.save('./exp/lastfm/{}/item_emb'.format(model_name), self.V)
+        # with open('./exp/lastfm/{}/id2user.pickle'.format(model_name), 'wb') as handle:
+        #     pickle.dump(self.data.id2user, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        # with open('./exp/lastfm/{}/id2item.pickle'.format(model_name), 'wb') as handle:
+        #     pickle.dump(self.data.id2item, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        
+        # print("path:  " + './exp/lastfm/{}/user_emb'.format(model_name))
 
     def saveModel(self):
         self.bestU, self.bestV = self.sess.run([self.final_user_embeddings, self.final_item_embeddings])

@@ -43,6 +43,7 @@ class SEPTV2_yelp(SocialRecommender, GraphRecommender):
         self.graph_label_w = float(args['-graph_label_w'])
         self.cluster_type = int(args['-cluster_type']) 
         self.top_k = int(args['-topk']) 
+        self.pretrain_num = int(args['-pretrain_num'])
         # pdb.set_trace()
 
 
@@ -1042,8 +1043,8 @@ class SEPTV2_yelp(SocialRecommender, GraphRecommender):
                 # self.social_ppr_cluster_loss += self.social_ppr_cluster_w * self.ssl_layer_loss(self.rec_item_embeddings, self.item_ppr_cluster_emb)
                 # self.socail_ppr_cluster_hinge_loss = self.social_ppr_cluster_w * self.hinge_cl_loss(self.user_embeddings, self.social_ppr_cluster_emb)
                 # loss += self.social_ppr_cluster_w * self.social_ppr_cluster_loss
-                if self.inter_flag == True:
-                    self.social_ppr_cluster_loss += self.social_ppr_cluster_w * self.ssl_layer_loss(self.rec_user_embeddings, self.interaction_cluster_emb)
+                # if self.inter_flag == True:
+                #     self.social_ppr_cluster_loss += self.social_ppr_cluster_w * self.ssl_layer_loss(self.rec_user_embeddings, self.interaction_cluster_emb)
             
             elif self.cluster_type == 2:
                 self.social_ppr_cluster_loss = self.social_ppr_cluster_w * self.ssl_layer_both_item_loss(self.edgo_ppr_cluster_emb, self.social_ppr_cluster_emb)
@@ -1095,7 +1096,7 @@ class SEPTV2_yelp(SocialRecommender, GraphRecommender):
         self.sess.run(init)
         for epoch in range(self.maxEpoch):
             #joint learning
-            if epoch > self.maxEpoch / 3: #need ?
+            if epoch > self.maxEpoch / self.pretrain_num: #need ?
             # if epoch > -1: #need ?
             # if epoch > -1: #need ?
             # if epoch > -1:

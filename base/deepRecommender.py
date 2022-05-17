@@ -23,7 +23,8 @@ class DeepRecommender(IterativeRecommender):
         self.item_embeddings = tf.Variable(tf.truncated_normal(shape=[self.num_items, self.emb_size], stddev=0.005), name='V')
         self.batch_user_emb = tf.nn.embedding_lookup(self.user_embeddings, self.u_idx)
         self.batch_pos_item_emb = tf.nn.embedding_lookup(self.item_embeddings, self.v_idx)
-        config = tf.ConfigProto()
+        # config = tf.ConfigProto()
+        config = tf.ConfigProto(allow_soft_placement=True)
         config.gpu_options.allow_growth = True
         self.sess = tf.Session(config=config)
 

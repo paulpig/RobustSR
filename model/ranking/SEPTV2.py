@@ -11,6 +11,7 @@ from util import config
 from util.loss import bpr_loss
 import random
 import pdb
+import pickle
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 #Suggested Maxium epoch LastFM: 120, Douban-Book: 30, Yelp: 30.
@@ -762,8 +763,8 @@ class SEPTV2(SocialRecommender, GraphRecommender):
             # add social-based ppr mat
             social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat()
 
-            # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type='hk', weight=0.7)
-            # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type='origin')
+            # # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type='hk', weight=0.7)
+            # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type_enc='origin')
             # social_mat = self._convert_sp_mat_to_sp_tensor(social_ppr_mat)
             # social_mat = tf.sparse.to_dense(social_mat)
             self.social_ppr_mat = tf.convert_to_tensor(social_ppr_mat, dtype=tf.float32) #(userNum, userNum)
@@ -776,6 +777,7 @@ class SEPTV2(SocialRecommender, GraphRecommender):
             self.global_social_user_emb, self.local_social_user_emb = self.get_local_global_user_rep(social_ppr_sp_mat, self.bi_social_matrix)
 
         if self.social_ppr_cluster_w != 0.0:
+            social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat()
             # add top k merge emb
             # self.social_ppr_cluster_emb = self.sampleTopkUsers(self.user_embeddings)
             # self.cluster_type = 1
@@ -806,12 +808,12 @@ class SEPTV2(SocialRecommender, GraphRecommender):
             elif self.cluster_type == 6:
                 self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(self.rec_user_embeddings, top_k=10, social_ppr_mat=social_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2) #目前的sota.
                 # add interactioin uu cluster emb
-                self.inter_flag = True
+                self.inter_flag = False
                 # todo
-                uu_inter_mat, ii_inter_mat = self.get_interaction_uu_ii(uu_weight=0, ii_weight=0) # csr mat; 调整下不同的参数的效果;
-                uu_inter_ppr_mat, uu_inter_ppr_sp_mat =  self.cal_ppr_common(uu_inter_mat) # good results.
-                # uu_inter_ppr_mat = uu_inter_ppr_mat.toarray()
-                self.interaction_cluster_emb = self.sampleTopkUsersKeepOriFromInteractionUUMat(self.rec_user_embeddings, top_k=10, social_ppr_mat=uu_inter_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2)
+                # uu_inter_mat, ii_inter_mat = self.get_interaction_uu_ii(uu_weight=0, ii_weight=0) # csr mat; 调整下不同的参数的效果;
+                # uu_inter_ppr_mat, uu_inter_ppr_sp_mat =  self.cal_ppr_common(uu_inter_mat) # good results.
+                # # uu_inter_ppr_mat = uu_inter_ppr_mat.toarray()
+                # self.interaction_cluster_emb = self.sampleTopkUsersKeepOriFromInteractionUUMat(self.rec_user_embeddings, top_k=10, social_ppr_mat=uu_inter_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2)
                 
         if self.rec_loss_aug_w != 0.0:
             # add dropout edged grpahs
@@ -1104,9 +1106,25 @@ class SEPTV2(SocialRecommender, GraphRecommender):
                                           feed_dict=feed_dict)
                     print(self.foldInfo, 'training:', epoch + 1, 'batch', n, 'rec loss:', l1)
             self.U, self.V = self.sess.run([self.rec_user_embeddings, self.rec_item_embeddings])
-            # if epoch % 20 == 0 or epoch == (self.maxEpoch - 1):
+            # if epoch % 10 == 0 or epoch == (self.maxEpoch - 1):
             self.ranking_performance(epoch) #model performance;
         self.U,self.V = self.bestU,self.bestV
+
+        # save best user and item embs, user and item dict,  id2user, id2item
+        # self.data.id2user, self.data.id2item: dict
+        # self.U, self.V: numpy
+        # save
+        # model_name = "SCIL_v2"
+        # model_name = "ppr_v2"
+        # # model_name = "0_1_score"
+        # np.save('./exp/lastfm/{}/user_emb'.format(model_name), self.U)
+        # np.save('./exp/lastfm/{}/item_emb'.format(model_name), self.V)
+        # with open('./exp/lastfm/{}/id2user.pickle'.format(model_name), 'wb') as handle:
+        #     pickle.dump(self.data.id2user, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        # with open('./exp/lastfm/{}/id2item.pickle'.format(model_name), 'wb') as handle:
+        #     pickle.dump(self.data.id2item, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        
+        # print("path:  " + './exp/lastfm/{}/user_emb'.format(model_name))
 
     def saveModel(self):
         self.bestU, self.bestV = self.sess.run([self.rec_user_embeddings, self.rec_item_embeddings])

@@ -91,9 +91,12 @@ class DHCF(DeepRecommender):
 
         # user_embeddings = tf.reduce_sum(all_user_embeddings,axis=0)/(1+self.n_layer)
         # item_embeddings = tf.reduce_sum(all_item_embeddings, axis=0) / (1 + self.n_layer)
+
+        user_embeddings = tf.reduce_sum(all_user_embeddings,axis=0)
+        item_embeddings = tf.reduce_sum(all_item_embeddings, axis=0)
         #
-        user_embeddings = tf.concat(all_user_embeddings,axis=1)
-        item_embeddings = tf.concat(all_item_embeddings, axis=1)
+        # user_embeddings = tf.concat(all_user_embeddings,axis=1)
+        # item_embeddings = tf.concat(all_item_embeddings, axis=1)
 
         self.neg_idx = tf.placeholder(tf.int32, name="neg_holder")
         self.neg_item_embedding = tf.nn.embedding_lookup(item_embeddings, self.neg_idx)

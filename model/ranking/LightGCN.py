@@ -2,6 +2,8 @@ from base.graphRecommender import GraphRecommender
 import tensorflow as tf
 from util.loss import bpr_loss
 from util.config import OptionConf
+import pickle
+import numpy as np
 import pdb
 """
 LightGCN model
@@ -56,6 +58,15 @@ class LightGCN(GraphRecommender):
                 # pdb.set_trace()
                 print(self.foldInfo,'training:', epoch + 1, 'batch', n, 'loss:', l)
         self.U, self.V = self.sess.run([self.multi_user_embeddings, self.multi_item_embeddings])
+
+        # exp = 'LightGCN'
+        # np.save('./exp/lastfm/{}/user_emb'.format(exp), self.U)
+        # np.save('./exp/lastfm/{}/item_emb'.format(exp), self.V)
+        # with open('./exp/lastfm/{}/id2user.pickle'.format(exp), 'wb') as handle:
+        #     pickle.dump(self.data.id2user, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        # with open('./exp/lastfm/{}/id2item.pickle'.format(exp), 'wb') as handle:
+        #     pickle.dump(self.data.id2item, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        
 
     def predictForRanking(self, u):
         'invoked to rank all the items for the user'

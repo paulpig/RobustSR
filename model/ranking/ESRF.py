@@ -7,6 +7,7 @@ from math import sqrt
 import numpy as np
 import os
 from util import config
+import pickle
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 def gumbel_softmax(logits, temperature=0.2):
@@ -306,6 +307,15 @@ class ESRF(SocialRecommender,GraphRecommender):
                                            feed_dict={self.userSegment:u_i,self.isSocial: 0,self.isAttentive:0,self.sampledItems:selectedItems})
             self.ranking_performance(epoch+2*self.maxEpoch//3)
         self.U, self.V = self.bestU, self.bestV
+
+        exp = 'ESRF'
+        np.save('./exp/lastfm/{}/user_emb'.format(exp), self.U)
+        np.save('./exp/lastfm/{}/item_emb'.format(exp), self.V)
+        with open('./exp/lastfm/{}/id2user.pickle'.format(exp), 'wb') as handle:
+            pickle.dump(self.data.id2user, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        with open('./exp/lastfm/{}/id2item.pickle'.format(exp), 'wb') as handle:
+            pickle.dump(self.data.id2item, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
 
         # self.attentiveTraining = 1
         # #adversarial learning with attention

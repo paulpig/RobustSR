@@ -142,26 +142,27 @@ class MHCN_doubanbook(SocialRecommender,GraphRecommender):
         self.ss_loss = 0
         #multi-channel convolution
         for k in range(self.n_layers):
-            mixed_embedding = channel_attention(user_embeddings_c1, user_embeddings_c2, user_embeddings_c3)[0] + simple_user_embeddings / 2
-            #Channel S
-            user_embeddings_c1 = tf.sparse_tensor_dense_matmul(H_s,user_embeddings_c1)
-            norm_embeddings = tf.math.l2_normalize(user_embeddings_c1, axis=1)
-            all_embeddings_c1 += [norm_embeddings]
-            #Channel J
-            user_embeddings_c2 = tf.sparse_tensor_dense_matmul(H_j, user_embeddings_c2)
-            norm_embeddings = tf.math.l2_normalize(user_embeddings_c2, axis=1)
-            all_embeddings_c2 += [norm_embeddings]
-            #Channel P
-            user_embeddings_c3 = tf.sparse_tensor_dense_matmul(H_p, user_embeddings_c3)
-            norm_embeddings = tf.math.l2_normalize(user_embeddings_c3, axis=1)
-            all_embeddings_c3 += [norm_embeddings]
-            # item convolution
-            new_item_embeddings = tf.sparse_tensor_dense_matmul(tf.sparse.transpose(R), mixed_embedding)
-            norm_embeddings = tf.math.l2_normalize(new_item_embeddings, axis=1)
-            all_embeddings_i += [norm_embeddings]
-            simple_user_embeddings = tf.sparse_tensor_dense_matmul(R, item_embeddings)
-            all_embeddings_simple += [tf.math.l2_normalize(simple_user_embeddings, axis=1)]
-            item_embeddings = new_item_embeddings
+            with tf.device("/gpu:{}".format(k)):
+                mixed_embedding = channel_attention(user_embeddings_c1, user_embeddings_c2, user_embeddings_c3)[0] + simple_user_embeddings / 2
+                #Channel S
+                user_embeddings_c1 = tf.sparse_tensor_dense_matmul(H_s,user_embeddings_c1)
+                norm_embeddings = tf.math.l2_normalize(user_embeddings_c1, axis=1)
+                all_embeddings_c1 += [norm_embeddings]
+                #Channel J
+                user_embeddings_c2 = tf.sparse_tensor_dense_matmul(H_j, user_embeddings_c2)
+                norm_embeddings = tf.math.l2_normalize(user_embeddings_c2, axis=1)
+                all_embeddings_c2 += [norm_embeddings]
+                #Channel P
+                user_embeddings_c3 = tf.sparse_tensor_dense_matmul(H_p, user_embeddings_c3)
+                norm_embeddings = tf.math.l2_normalize(user_embeddings_c3, axis=1)
+                all_embeddings_c3 += [norm_embeddings]
+                # item convolution
+                new_item_embeddings = tf.sparse_tensor_dense_matmul(tf.sparse.transpose(R), mixed_embedding)
+                norm_embeddings = tf.math.l2_normalize(new_item_embeddings, axis=1)
+                all_embeddings_i += [norm_embeddings]
+                simple_user_embeddings = tf.sparse_tensor_dense_matmul(R, item_embeddings)
+                all_embeddings_simple += [tf.math.l2_normalize(simple_user_embeddings, axis=1)]
+                item_embeddings = new_item_embeddings
         #averaging the channel-specific embeddings
         user_embeddings_c1 = tf.reduce_sum(all_embeddings_c1, axis=0)
         user_embeddings_c2 = tf.reduce_sum(all_embeddings_c2, axis=0)
@@ -213,7 +214,7 @@ class MHCN_doubanbook(SocialRecommender,GraphRecommender):
         reg_loss += self.regU * (tf.nn.l2_loss(self.user_embeddings) + tf.nn.l2_loss(self.item_embeddings))
         total_loss = rec_loss+reg_loss + self.ss_rate*self.ss_loss
         opt = tf.train.AdamOptimizer(self.lRate)
-        train_op = opt.minimize(total_loss)
+        train_op = opt.minimize(total_loss, colocate_gradients_with_ops=True)
         init = tf.global_variables_initializer()
         self.sess.run(init)
         # Suggested Maximum epoch Setting: LastFM 120 Douban 30 Yelp 30

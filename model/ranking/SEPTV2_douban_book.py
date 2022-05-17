@@ -788,6 +788,8 @@ class SEPTV2_douban_book(SocialRecommender, GraphRecommender):
             self.global_social_user_emb, self.local_social_user_emb = self.get_local_global_user_rep(social_ppr_sp_mat, self.bi_social_matrix)
 
         if self.social_ppr_cluster_w != 0.0:
+            social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat() # unidirection
+            # self.social_ppr_mat = tf.convert_to_tensor(social_ppr_mat, dtype=tf.float32) #(userNum, userNum)
             # add top k merge emb
             # self.social_ppr_cluster_emb = self.sampleTopkUsers(self.user_embeddings)
             # self.cluster_type = 1

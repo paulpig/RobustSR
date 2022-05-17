@@ -791,6 +791,8 @@ class SEPTV2_delicious(SocialRecommender, GraphRecommender):
             # add top k merge emb
             # self.social_ppr_cluster_emb = self.sampleTopkUsers(self.user_embeddings)
             # self.cluster_type = 1
+            social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat() # unidirection
+            
             if self.cluster_type == 1: #top_10 is better than top_5 and top_20.
                 self.social_ppr_cluster_emb = self.sampleTopkUsers(self.rec_user_embeddings, top_k=10) # context embedding. not good. 模型是有效的, 说明聚合操作可以深挖; how to cluster users? 通过graph partition得到每个节点的标签, 根据标签得到聚合表征;
             elif self.cluster_type == 2: # todo
