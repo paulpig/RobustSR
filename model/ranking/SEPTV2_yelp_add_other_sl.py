@@ -131,6 +131,48 @@ class SEPTV2_yelp_add_other_sl(SocialRecommender, GraphRecommender):
         neg1 = score(row_column_shuffle(edge_embeddings),graph)
         global_loss = tf.reduce_sum(-tf.log(tf.sigmoid(pos-neg1)))
         return global_loss+local_loss
+
+    
+    def hierarchical_self_supervision_new_v2(self,em, adj_list, add_global=True, add_local=True):
+        """
+        adj_list: list of sparse tensors;
+        """
+        def row_shuffle(embedding):
+            return tf.gather(embedding, tf.random.shuffle(tf.range(tf.shape(embedding)[0])))
+        def row_column_shuffle(embedding):
+            corrupted_embedding = tf.transpose(tf.gather(tf.transpose(embedding), tf.random.shuffle(tf.range(tf.shape(tf.transpose(embedding))[0])))) #(user, dim)
+            corrupted_embedding = tf.gather(corrupted_embedding, tf.random.shuffle(tf.range(tf.shape(corrupted_embedding)[0])))
+            return corrupted_embedding
+        def score(x1,x2):
+            return tf.reduce_sum(tf.multiply(x1,x2),1)
+        user_embeddings = em
+        if self.dataset_name == "douban_book":
+            user_embeddings = tf.math.l2_normalize(em,1) #For Douban, normalization is needed.
+        
+        edge_embeddings_list = []
+        for adj_one in adj_list:
+            # edge_embeddings_list.append(tf.sparse_tensor_dense_matmul(adj_one,user_embeddings))
+            edge_embeddings_list.append(tf.matmul(adj_one,user_embeddings))
+            # edge_embeddings = tf.sparse_tensor_dense_matmul(adj,user_embeddings)
+        edge_embeddings = tf.concat(edge_embeddings_list, axis=0)
+
+        #Local MIM, 为什么需要两层的shuffle;
+        pos = score(user_embeddings,edge_embeddings)
+        neg1 = score(row_shuffle(user_embeddings),edge_embeddings)
+        neg2 = score(row_column_shuffle(edge_embeddings),user_embeddings)
+        local_loss = tf.reduce_sum(-tf.log(tf.sigmoid(pos-neg1))-tf.log(tf.sigmoid(neg1-neg2)))
+        #Global MIM
+        graph = tf.reduce_mean(edge_embeddings,0)
+        pos = score(edge_embeddings,graph)
+        neg1 = score(row_column_shuffle(edge_embeddings),graph)
+        global_loss = tf.reduce_sum(-tf.log(tf.sigmoid(pos-neg1)))
+
+        if add_global and add_local:
+            return global_loss+local_loss
+        elif add_global and not add_local:
+            return global_loss
+        elif add_local and not add_global:
+            return local_loss
     
 
     def get_local_global_user_rep(self, socail_ppr_mat, social_local_mat):
@@ -911,9 +953,14 @@ class SEPTV2_yelp_add_other_sl(SocialRecommender, GraphRecommender):
         #     return tf.multiply(em,tf.nn.sigmoid(tf.matmul(em, self.weights['sgating'])+self.weights['sgating_bias']))
 
         if self.inter_cl_w != 0.0:
+            # social_ppr_sub_tensor_list_v2 = self.social_ppr_sub_tensor_list
             social_ppr_sp_mat = self._convert_sp_mat_to_sp_tensor(social_ppr_sp_mat) # original social graph;
             # self.sl_loss = self.hierarchical_self_supervision(self_supervised_gating(self.rec_user_embeddings), social_ppr_sp_mat)
             self.sl_loss = self.hierarchical_self_supervision(self.rec_user_embeddings, social_ppr_sp_mat)
+            # self.sl_loss = self.hierarchical_self_supervision_new_v2(self.rec_user_embeddings, social_ppr_sub_tensor_list_v2, add_local=True, add_global=True)
+            # self.sl_loss = self.hierarchical_self_supervision_new_v2(self.rec_user_embeddings, social_ppr_sub_tensor_list_v2, add_local=True, add_global=False)
+            # self.sl_loss = self.hierarchical_self_supervision_new_v2(self.rec_user_embeddings, social_ppr_sub_tensor_list_v2, add_local=False, add_global=True)
+            # self.sl_loss = self.hierarchical_self_supervision_new_v2(self.rec_user_embeddings, social_ppr_sp_mat)
       
     def ssl_layer_loss(self, userEmb, userEmbAug, ssl_temp=0.1):
         """

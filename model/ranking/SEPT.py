@@ -316,15 +316,15 @@ class SEPT(SocialRecommender, GraphRecommender):
             self.ranking_performance(epoch)
         self.U,self.V = self.bestU,self.bestV
         
-        # model_name = "SEPT"
-        # np.save('./exp/lastfm/{}/user_emb'.format(model_name), self.U)
-        # np.save('./exp/lastfm/{}/item_emb'.format(model_name), self.V)
-        # with open('./exp/lastfm/{}/id2user.pickle'.format(model_name), 'wb') as handle:
-        #     pickle.dump(self.data.id2user, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        # with open('./exp/lastfm/{}/id2item.pickle'.format(model_name), 'wb') as handle:
-        #     pickle.dump(self.data.id2item, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        model_name = "SEPT_v1"
+        np.save('./exp/lastfm/{}/user_emb'.format(model_name), self.U)
+        np.save('./exp/lastfm/{}/item_emb'.format(model_name), self.V)
+        with open('./exp/lastfm/{}/id2user.pickle'.format(model_name), 'wb') as handle:
+            pickle.dump(self.data.id2user, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        with open('./exp/lastfm/{}/id2item.pickle'.format(model_name), 'wb') as handle:
+            pickle.dump(self.data.id2item, handle, protocol=pickle.HIGHEST_PROTOCOL)
         
-        # print("path:  " + './exp/lastfm/{}/user_emb'.format(model_name))
+        print("path:  " + './exp/lastfm/{}/user_emb'.format(model_name))
 
     def saveModel(self):
         self.bestU, self.bestV = self.sess.run([self.rec_user_embeddings, self.rec_item_embeddings])

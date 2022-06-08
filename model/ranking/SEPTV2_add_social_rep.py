@@ -40,7 +40,8 @@ class SEPTV2_add_social_rep(SocialRecommender, GraphRecommender):
         self.rec_ppr_aug_w = float(args['-rec_ppr_aug_w'])
         self.inter_ppr_w = float(args['-inter_ppr_w'])
         self.graph_label_w = float(args['-graph_label_w'])
-        self.cluster_type = int(args['-cluster_type']) 
+        self.cluster_type = int(args['-cluster_type'])
+        self.inter_cl_w = float(args['-inter_cl_w'])
         # pdb.set_trace()
 
 
@@ -845,8 +846,19 @@ class SEPTV2_add_social_rep(SocialRecommender, GraphRecommender):
 
             # pdb.set_trace()
 
+        # if self.inter_cl_w != 0.0:
+        self.ppr_user_emb_fi = tf.matmul(self.social_ppr_mat, self.rec_user_embeddings)
         # self.rec_user_embeddings = self.social_ppr_cluster_emb
-        self.rec_user_embeddings = self.social_ppr_cluster_emb + self.rec_user_embeddings
+
+        # add type 
+        # self.rec_user_embeddings = self.social_ppr_cluster_emb + (self.rec_user_embeddings + self.ppr_user_emb_fi) / 2.0
+        # mean type
+        # self.rec_user_embeddings = (self.social_ppr_cluster_emb + self.rec_user_embeddings + self.ppr_user_emb_fi) / 3.0
+        # concat type
+        initializer = tf.contrib.layers.xavier_initializer()
+        self.weights_v1 = tf.Variable(initializer([self.emb_size *3, self.emb_size]), name='output_weight_v1')
+        self.rec_user_embeddings = tf.matmul(tf.concat([self.social_ppr_cluster_emb, (self.rec_user_embeddings + self.ppr_user_emb_fi)/2.0], axis=1), self.weights_v1)
+
         # embedding look-up
         self.batch_user_emb = tf.nn.embedding_lookup(self.rec_user_embeddings, self.u_idx)
         self.batch_pos_item_emb = tf.nn.embedding_lookup(self.rec_item_embeddings, self.v_idx)
@@ -1117,13 +1129,15 @@ class SEPTV2_add_social_rep(SocialRecommender, GraphRecommender):
         # self.data.id2user, self.data.id2item: dict
         # self.U, self.V: numpy
         # save
-        exp = 'add_inter_social_rep'
-        np.save('./exp/lastfm/{}/user_emb'.format(exp), self.U)
-        np.save('./exp/lastfm/{}/item_emb'.format(exp), self.V)
-        with open('./exp/lastfm/{}/id2user.pickle'.format(exp), 'wb') as handle:
-            pickle.dump(self.data.id2user, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        with open('./exp/lastfm/{}/id2item.pickle'.format(exp), 'wb') as handle:
-            pickle.dump(self.data.id2item, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        # exp = 'add_inter_social_rep'
+        # exp = 'mean_inter_social_rep'
+        # exp = 'mlp_inter_social_rep'
+        # np.save('./exp/lastfm/{}/user_emb'.format(exp), self.U)
+        # np.save('./exp/lastfm/{}/item_emb'.format(exp), self.V)
+        # with open('./exp/lastfm/{}/id2user.pickle'.format(exp), 'wb') as handle:
+        #     pickle.dump(self.data.id2user, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        # with open('./exp/lastfm/{}/id2item.pickle'.format(exp), 'wb') as handle:
+        #     pickle.dump(self.data.id2item, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 

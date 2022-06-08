@@ -10,8 +10,11 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import KernelDensity
 import random
 import matplotlib as mpl
-
-
+from scipy.spatial.distance import cdist
+import pickle5 as pickle
+from sklearn import preprocessing
+from sklearn.preprocessing import normalize
+import seaborn as sns
 
 #model_name = 'only_ppr'
 #model_name = 'ppr_v2'
@@ -20,46 +23,41 @@ import matplotlib as mpl
 #model_name = 'add_inter_social_rep'
 #model_name = 'only_cl'
 #model_name = 'diffNet'
-model_name = 'LightGCN'
+#model_name = 'LightGCN'
+#model_name = 'LightGCN_v1'
 #model_name = 'diffNet_v3'
 #model_name = 'diffNet_v2'
 #model_name = 'ESRF'
 #model_name = 'MHCN'
 #model_name = 'SEPT'
+#model_name = 'SEPT_v1'
 #model_name = 'SCIL_v1'
 #model_name = 'SCIL'
 #model_name = 'SCIL_v2'
-model_name = 'DANSER'
+#model_name = 'SCIL_v3'
+#model_name = 'DANSER'
+#model_name = 'fuse'
+model_name = 'danser_v2'
+print(model_name)
 
 user_emb = np.load('./{}/user_emb.npy'.format(model_name))
+user_emb = preprocessing.scale(user_emb)
 item_emb = np.load('./{}/item_emb.npy'.format(model_name))
+#item_emb = preprocessing.scale(item_emb)
 
-from sklearn.preprocessing import normalize
-import seaborn as sns
-#fig, axs = plt.subplots(2,2)
-fig, axs = plt.subplots(1,1, figsize=(5,5))
-#plt.title(model_name)
-#pdb.set_trace()
-
-
-# read dataset
-#dataset_name = 'lastfm'
-dataset_name = 'FilmTrust'
-#dataset_path = '/pub/data/kyyx/wbc/QRec/dataset/{}/'.format(dataset_name)
-#dataset_path = '/pub/data/kyyx/wbc/QRec/dataset/{}/'.format(dataset_name)
-dataset_path = './FilmTrust/'
+dataset_path = './lastfm/'
 
 rating = dataset_path + 'ratings.txt'
-social = dataset_path + 'trust.txt'
+social = dataset_path + 'trusts.txt'
 
 # 随机选择一个用户, 检索用户的社交邻居和交互的items;
 delim = ' |,|\t'
 
-#user2id = {}
-
 with open(rating) as f:
     ratings = f.readlines()
 
+
+# DANSER模型对应的user2id
 user2id = {}
 item2id = {}
 user2items = {}
@@ -69,10 +67,29 @@ for lineno, line in enumerate(ratings):
     #    continue
     #userid = user2id[order[0]]
     #itemid = item2id[order[1]]
-    if order[0] not in user2id:
-        user2id[order[0]] = len(user2id)
+    if int(order[0]) not in user2id:
+        user2id[int(order[0])] = int(order[0])
     if order[1] not in item2id:
-        item2id[order[1]] = len(item2id)
+        item2id[int(order[1])] = int(order[1])
+    userid = user2id[int(order[0])]
+    itemid = item2id[int(order[1])]
+    if userid not in user2items:
+        user2items[userid] = [itemid]
+    else:
+        user2items[userid].append(itemid)
+
+fig, axs = plt.subplots(1,1, figsize=(5,5))
+
+Y = cdist(user_emb, user_emb, 'minkowski', p=2.)
+uniform = np.log(np.mean(np.exp(-2*np.power(Y, 2))))
+print("uniform score:", uniform)
+
+
+user2items = {}
+for lineno, line in enumerate(ratings):
+    order = split(delim,line.strip())
+    if order[0] not in user2id or order[1] not in item2id:
+        continue
     userid = user2id[order[0]]
     itemid = item2id[order[1]]
     if userid not in user2items:
@@ -86,10 +103,179 @@ with open(social) as f:
 user2users = {}
 for lineno, line in enumerate(social_raw):
     order = split(delim,line.strip())
-    if order[0] not in user2id or order[1] not in user2id:
+    if int(order[0]) not in user2id or int(order[1]) not in user2id:
+        continue
+    userid = user2id[int(order[0])]
+    userid2 = user2id[int(order[1])]
+
+    if userid not in user2users:
+        user2users[userid] = [userid2]
+    else:
+        user2users[userid].append(userid2)
+
+
+# 随机选一个用户
+def calculate_distance(user_id_str):
+# 随机选一个用户
+    user_id = user_id_str
+
+    center_user_emb = user_emb[user_id]
+    neighbor_users = user_emb[user2users[user_id]]
+    centor_user_dis =np.mean(np.power(np.linalg.norm(np.reshape(center_user_emb, (1, -1)) - neighbor_users), 2))
+    return centor_user_dis
+
+# get 1-hop
+sim_total = []
+for index in range(len(user_emb)):
+    #pdb.set_trace()
+    #index_data = "{}".format(index)
+    #pdb.set_trace()
+    index_data = index
+    #index_data = index + 1
+    if index_data not in user2id:
+        continue
+
+    if user2id[index_data] not in user2users:
+        continue
+
+    sim = calculate_distance(user2id[index_data])
+    sim_total.append(sim)
+
+#pdb.set_trace()
+print("align score: ", np.mean(sim_total))
+#print("user item match score: ",np.log(np.mean(sim_total)))
+
+perplexity = 80
+
+n_components = 2
+tsne = manifold.TSNE(
+    n_components=n_components,
+    init="random",
+    random_state=0,
+    perplexity=perplexity,
+    learning_rate="auto",
+    n_iter=600,
+)
+
+
+user_emb_2d = tsne.fit_transform(user_emb)
+
+user_emb_2d = normalize(user_emb_2d, axis=1,norm='l2')
+cmap = plt.cm.get_cmap('BuPu', 15)
+
+# extract all colors from the .jet map
+cmaplist = [cmap(i) for i in range(cmap.N)]
+# force the first color entry to be grey
+cmaplist[0] = (1., 1., 1., 1.0)
+# create the new map
+cmap = mpl.colors.LinearSegmentedColormap.from_list(
+    'Custom cmap', cmaplist, cmap.N)
+# define the bins and normalize
+
+
+#sns.set_style("darkgrid")
+#sns.set(rc={'axes.facecolor':'cornflowerblue', 'figure.facecolor':'cornflowerblue'})
+kwargs = {'levels': np.arange(0, 4.2, 0.5)}
+
+sns.kdeplot(data=user_emb_2d, bw=0.05, shade=True, cmap=cmap, legend=True, **kwargs)
+
+my_x_ticks = np.arange(-1, 1.2, 1)
+plt.xticks(my_x_ticks, fontsize=10)
+axs.spines['bottom'].set_linewidth(2.2);###设置底部坐标轴的粗细
+axs.spines['left'].set_linewidth(2.2);####设置左边坐标轴的粗细
+axs.spines['right'].set_linewidth(2.2);###设置右边坐标轴的粗细
+axs.spines['top'].set_linewidth(2.2);####设置上部坐标轴的粗细
+
+#plt.tick_params(width=20, labelsize=4)
+#plt.title(model_name,fontdict={'size':14}, fontweight="bold", fontname="Times New Roman")
+
+#plt.savefig('./result/{}_final_v2.pdf'.format(model_name))
+plt.show()
+
+exit(0)
+
+
+from sklearn.preprocessing import normalize
+import seaborn as sns
+#fig, axs = plt.subplots(2,2)
+fig, axs = plt.subplots(1,1, figsize=(5,5))
+#plt.title(model_name)
+#pdb.set_trace()
+
+
+# read dataset
+dataset_name = 'lastfm'
+#dataset_name = 'FilmTrust'
+#dataset_path = '/pub/data/kyyx/wbc/QRec/dataset/{}/'.format(dataset_name)
+#dataset_path = '/pub/data/kyyx/wbc/QRec/dataset/{}/'.format(dataset_name)
+#dataset_path = './FilmTrust/'
+dataset_path = './lastfm/'
+
+rating = dataset_path + 'ratings.txt'
+social = dataset_path + 'trusts.txt'
+
+# 随机选择一个用户, 检索用户的社交邻居和交互的items;
+delim = ' |,|\t'
+
+#user2id = {}
+
+with open(rating) as f:
+    ratings = f.readlines()
+
+
+# DANSER模型对应的user2id
+#user2id = {}
+#item2id = {}
+#user2items = {}
+#for lineno, line in enumerate(ratings):
+#    order = split(delim,line.strip())
+#    #if order[0] not in user2id or order[1] not in item2id:
+#    #    continue
+#    #userid = user2id[order[0]]
+#    #itemid = item2id[order[1]]
+#    if order[0] not in user2id:
+#        user2id[order[0]] = len(user2id)
+#    if order[1] not in item2id:
+#        item2id[order[1]] = len(item2id)
+#    userid = user2id[order[0]]
+#    itemid = item2id[order[1]]
+#    if userid not in user2items:
+#        user2items[userid] = [itemid]
+#    else:
+#        user2items[userid].append(itemid)
+
+
+with open('./{}/id2user.pickle'.format(model_name), 'rb') as handle:
+    id2user = pickle.load(handle)
+
+with open('./{}/id2item.pickle'.format(model_name), 'rb') as handle:
+    id2item = pickle.load(handle)
+
+user2id = dict([(value, key) for key, value in id2user.items()])
+item2id = dict([(value, key) for key, value in id2item.items()])
+
+user2items = {}
+for lineno, line in enumerate(ratings):
+    order = split(delim,line.strip())
+    if order[0] not in user2id or order[1] not in item2id:
         continue
     userid = user2id[order[0]]
-    userid2 = user2id[order[1]]
+    itemid = item2id[order[1]]
+    if userid not in user2items:
+        user2items[userid] = [itemid]
+    else:
+        user2items[userid].append(itemid)
+
+with open(social) as f:
+    social_raw = f.readlines()
+
+user2users = {}
+for lineno, line in enumerate(social_raw):
+    order = split(delim,line.strip())
+    if int(order[0]) not in user2id or int(order[1]) not in user2id:
+        continue
+    userid = user2id[int(order[0])]
+    userid2 = user2id[int(order[1])]
 
     if userid not in user2users:
         user2users[userid] = [userid2]
@@ -141,20 +327,22 @@ def calculate_distance(user_id_str):
     # l2 distance, alignment
     #distance_user_item = np.linalg.norm(centor_user_dis-centor_item_dis)
     #print("distance: ", distance_user_item)
-
     #centor_user_dis =np.power( np.mean(np.linalg.norm(np.reshape(center_user_emb, (1, -1)) - neighbor_users)), 2) * 20
-    #return centor_user_dis
+    #centor_user_dis =np.mean(np.power(np.linalg.norm(np.reshape(center_user_emb, (1, -1)) - neighbor_users), 2))
+    centor_user_dis =np.mean(np.power(np.linalg.norm(np.reshape(center_user_emb, (1, -1)) - neighbor_users), 2))
+    return centor_user_dis
 
     # uniform
-    random_user_id = random.randint(0, len(user_emb)) -1
-    #while random_user_id == user_id or random_user_id not in id2user.keys():
-    while random_user_id == user_id:
-        random_user_id = random.randint(0, len(user_emb)) - 1
+    #random_user_id = random.randint(0, len(user_emb)) -1
+    ##while random_user_id == user_id or random_user_id not in id2user.keys():
+    #while random_user_id == user_id:
+    #    random_user_id = random.randint(0, len(user_emb)) - 1
 
-    random_user_emb = user_emb[random_user_id]
-    #pdb.set_trace()
-    return np.exp(-2*np.power(np.linalg.norm(np.linalg.norm(center_user_emb) - np.linalg.norm(random_user_emb)), 2)) /20.0
+    #random_user_emb = user_emb[random_user_id]
+    ##pdb.set_trace()
+    ##return np.exp(-2*np.power(np.linalg.norm(np.linalg.norm(center_user_emb) - np.linalg.norm(random_user_emb)), 2)) /20.0
     #return np.exp(-2*np.power(np.linalg.norm(np.linalg.norm(center_user_emb) - np.linalg.norm(random_user_emb)), 2))
+    ##return np.exp(-2*np.power(np.linalg.norm(center_user_emb - random_user_emb), 2))
 
     # cos sim
     #cos_sim = cosine_similarity(center_user_emb.reshape(1, -1), np.mean(hop2_neighbor_users_emb, axis=0).reshape(1, -1))
@@ -165,12 +353,18 @@ def calculate_distance(user_id_str):
     #return np.mean(neighbor_users, axis=0)
     #return np.mean(neighbor_items, axis=0)
 
-
+# uniform
+Y = cdist(user_emb, user_emb, 'minkowski', p=2.)
+uniform = np.log(np.mean(np.exp(-2*np.power(Y, 2))))
+print("uniform score:", uniform)
+#pdb.set_trace()
 
 # get 1-hop
 sim_total = []
 for index in range(len(user_emb)):
-    index_data = "{}".format(index)
+    #pdb.set_trace()
+    #index_data = "{}".format(index)
+    index_data = index
     #index_data = index + 1
     if index_data not in user2id:
         continue
@@ -182,12 +376,13 @@ for index in range(len(user_emb)):
     #    continue
     #if index > 1000:
     #    break
-    sim = calculate_distance(user2id[index_data])
-    sim_total.append(sim)
+
+    #sim = calculate_distance(user2id[index_data])
+    #sim_total.append(sim)
 
 #pdb.set_trace()
-#print("user item match score: ", np.mean(sim_total))
-print("user item match score: ",np.log( np.mean(sim_total)))
+print("align score: ", np.mean(sim_total))
+#print("user item match score: ",np.log(np.mean(sim_total)))
 
 
 #perplexity = 30
@@ -195,14 +390,34 @@ print("user item match score: ",np.log( np.mean(sim_total)))
 perplexity = 60
 #perplexity = 50
 #perplexity = 60 # best
+
 n_components = 2
+#tsne = manifold.TSNE(
+#    n_components=n_components,
+#    init="random",
+#    random_state=0,
+#    perplexity=perplexity,
+#    learning_rate="auto",
+#    n_iter=500,
+#)
+
+# good results
+#tsne = manifold.TSNE(
+#    n_components=n_components,
+#    init="random",
+#    random_state=8,
+#    perplexity=perplexity,
+#    learning_rate="auto",
+#    n_iter=500,
+#)
+
 tsne = manifold.TSNE(
     n_components=n_components,
     init="random",
-    random_state=0,
+    random_state=6,
     perplexity=perplexity,
     learning_rate="auto",
-    n_iter=500,
+    n_iter=600,
 )
 
 
@@ -227,7 +442,10 @@ user_emb_2d = normalize(user_emb_2d, axis=1,norm='l2')
 
 #cmap = plt.cm.jet  # define the colormap
 #cmap = plt.cm.get_cmap('GnBu', 10)
-cmap = plt.cm.get_cmap('GnBu', 8)
+#cmap = plt.cm.get_cmap('GnBu', 8)
+#cmap = plt.cm.get_cmap('BrBG', 8)
+cmap = plt.cm.get_cmap('BuPu', 15)
+
 # extract all colors from the .jet map
 cmaplist = [cmap(i) for i in range(cmap.N)]
 # force the first color entry to be grey
@@ -287,15 +505,16 @@ sns.kdeplot(data=user_emb_2d, bw=0.05, shade=True, cmap=cmap, legend=True, **kwa
 
 my_x_ticks = np.arange(-1, 1.2, 1)
 plt.xticks(my_x_ticks, fontsize=10)
-axs.spines['bottom'].set_linewidth(1.5);###设置底部坐标轴的粗细
-axs.spines['left'].set_linewidth(1.5);####设置左边坐标轴的粗细
-axs.spines['right'].set_linewidth(1.5);###设置右边坐标轴的粗细
-axs.spines['top'].set_linewidth(1.5);####设置上部坐标轴的粗细
+axs.spines['bottom'].set_linewidth(2.2);###设置底部坐标轴的粗细
+axs.spines['left'].set_linewidth(2.2);####设置左边坐标轴的粗细
+axs.spines['right'].set_linewidth(2.2);###设置右边坐标轴的粗细
+axs.spines['top'].set_linewidth(2.2);####设置上部坐标轴的粗细
 
 #plt.tick_params(width=20, labelsize=4)
-plt.title(model_name,fontdict={'size':14}, fontweight="bold", fontname="Times New Roman")
+#plt.title(model_name,fontdict={'size':14}, fontweight="bold", fontname="Times New Roman")
 
-plt.savefig('{}_final.pdf'.format(model_name))
+#plt.savefig('./result/{}_final_v2.pdf'.format(model_name))
+plt.show()
 
 exit(0)
 

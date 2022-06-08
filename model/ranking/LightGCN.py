@@ -57,16 +57,19 @@ class LightGCN(GraphRecommender):
                                 feed_dict={self.u_idx: user_idx, self.neg_idx: j_idx, self.v_idx: i_idx})
                 # pdb.set_trace()
                 print(self.foldInfo,'training:', epoch + 1, 'batch', n, 'loss:', l)
-        self.U, self.V = self.sess.run([self.multi_user_embeddings, self.multi_item_embeddings])
-
-        # exp = 'LightGCN'
+            self.U, self.V = self.sess.run([self.multi_user_embeddings, self.multi_item_embeddings])
+            self.ranking_performance(epoch)
+        self.U,self.V = self.bestU,self.bestV
+        # exp = 'LightGCN_v1'
         # np.save('./exp/lastfm/{}/user_emb'.format(exp), self.U)
         # np.save('./exp/lastfm/{}/item_emb'.format(exp), self.V)
         # with open('./exp/lastfm/{}/id2user.pickle'.format(exp), 'wb') as handle:
         #     pickle.dump(self.data.id2user, handle, protocol=pickle.HIGHEST_PROTOCOL)
         # with open('./exp/lastfm/{}/id2item.pickle'.format(exp), 'wb') as handle:
         #     pickle.dump(self.data.id2item, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        
+    
+    def saveModel(self):
+        self.bestU, self.bestV = self.sess.run([self.multi_user_embeddings, self.multi_item_embeddings])
 
     def predictForRanking(self, u):
         'invoked to rank all the items for the user'

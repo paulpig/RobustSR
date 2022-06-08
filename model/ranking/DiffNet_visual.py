@@ -56,8 +56,8 @@ class DiffNet_visual(SocialRecommender,GraphRecommender):
 
     def initModel(self):
         super(DiffNet_visual, self).initModel()
-        # S = self.buildSparseRelationMatrix()
-        S = self.get_birectional_social_matrix()
+        S = self.buildSparseRelationMatrix()
+        # S = self.get_birectional_social_matrix()
         
         indices = np.mat([S.row, S.col]).transpose()
         self.S = tf.SparseTensor(indices, S.data.astype(np.float32), S.shape)
@@ -66,23 +66,36 @@ class DiffNet_visual(SocialRecommender,GraphRecommender):
     def trainModel(self):
         self.weights = {}
         initializer = tf.contrib.layers.xavier_initializer()
+        for k in range(self.n_layers):
+            self.weights['weights%d' % k] = tf.Variable(
+                initializer([2 * self.emb_size, self.emb_size]), name='weights%d' % k)
+
+        # user_embeddings = self.user_embeddings
+        # # all_social_embeddings = [user_embeddings]
         # for k in range(self.n_layers):
-        #     self.weights['weights%d' % k] = tf.Variable(
-        #         initializer([2 * self.emb_size, self.emb_size]), name='weights%d' % k)
+        #     new_user_embeddings = tf.sparse_tensor_dense_matmul(self.S, user_embeddings)
+        #     new_user_embeddings = tf.math.l2_normalize(new_user_embeddings, axis=1)
+        #     user_embeddings = tf.matmul(tf.concat([new_user_embeddings,user_embeddings],1),self.weights['weights%d' % k])
+        #     # user_embeddings = tf.math.l2_normalize(user_embeddings, axis=1)
+        #     # all_social_embeddings += [user_embeddings]
+        #     # user_embeddings = tf.nn.relu(user_embeddings)
+        #     # user_embeddings = tf.math.l2_normalize(user_embeddings,axis=1)
+
+        # # user_embeddings = tf.reduce_sum(all_social_embeddings, axis=0)
+
+        # # final_user_embeddings = user_embeddings + tf.sparse_tensor_dense_matmul(self.A, self.item_embeddings)
+        # final_user_embeddings = user_embeddings + tf.math.l2_normalize(tf.sparse_tensor_dense_matmul(self.A, self.item_embeddings))
 
         user_embeddings = self.user_embeddings
-        all_social_embeddings = [user_embeddings]
         for k in range(self.n_layers):
             new_user_embeddings = tf.sparse_tensor_dense_matmul(self.S,user_embeddings)
-            # user_embeddings = tf.matmul(tf.concat([new_user_embeddings,user_embeddings],1),self.weights['weights%d' % k])
-            user_embeddings = tf.math.l2_normalize(new_user_embeddings, axis=1)
-            all_social_embeddings += [user_embeddings]
+            user_embeddings = tf.matmul(tf.concat([new_user_embeddings,user_embeddings],1),self.weights['weights%d' % k])
             # user_embeddings = tf.nn.relu(user_embeddings)
-            # user_embeddings = tf.math.l2_normalize(user_embeddings,axis=1)
+            user_embeddings = tf.math.l2_normalize(user_embeddings,axis=1)
 
-        user_embeddings = tf.reduce_sum(all_social_embeddings, axis=0)
+        # final_user_embeddings = user_embeddings+tf.sparse_tensor_dense_matmul(self.A,self.item_embeddings)
+        final_user_embeddings = user_embeddings + tf.math.l2_normalize(tf.sparse_tensor_dense_matmul(self.A, self.item_embeddings))
 
-        final_user_embeddings = user_embeddings + tf.sparse_tensor_dense_matmul(self.A, self.item_embeddings)
         self.neg_idx = tf.placeholder(tf.int32, name="neg_holder")
         self.neg_item_embedding = tf.nn.embedding_lookup(self.item_embeddings, self.neg_idx)
         self.u_embedding = tf.nn.embedding_lookup(final_user_embeddings, self.u_idx)
@@ -111,7 +124,7 @@ class DiffNet_visual(SocialRecommender,GraphRecommender):
                                 feed_dict={self.u_idx: user_idx, self.neg_idx: j_idx, self.v_idx: i_idx})
         # self.U,self.V = self.bestU,self.bestV
 
-        model_name = "diffNet_v3"
+        model_name = "diffNet_v5_true"
         np.save('./exp/lastfm/{}/user_emb'.format(model_name), self.U)
         np.save('./exp/lastfm/{}/item_emb'.format(model_name), self.V)
         with open('./exp/lastfm/{}/id2user.pickle'.format(model_name), 'wb') as handle:

@@ -18,14 +18,14 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 We have transplated QRec from py2 to py3. But we found that, with py3, SEPT achieves higher NDCG
 but lower (slightly) Prec and Recall compared with the results reported in the paper.
 '''
-class SEPT(SocialRecommender, GraphRecommender):
+class SEPT_bak(SocialRecommender, GraphRecommender):
     def __init__(self, conf, trainingSet=None, testSet=None, relation=None, fold='[1]'):
         GraphRecommender.__init__(self, conf=conf, trainingSet=trainingSet, testSet=testSet, fold=fold)
         SocialRecommender.__init__(self, conf=conf, trainingSet=trainingSet, testSet=testSet, relation=relation,fold=fold)
 
     def readConfiguration(self):
-        super(SEPT, self).readConfiguration()
-        args = config.OptionConf(self.config['SEPT'])
+        super(SEPT_bak, self).readConfiguration()
+        args = config.OptionConf(self.config['SEPT_bak'])
         self.n_layers = int(args['-n_layer'])
         self.ss_rate = float(args['-ss_rate'])
         self.drop_rate = float(args['-drop_rate'])
@@ -125,7 +125,7 @@ class SEPT(SocialRecommender, GraphRecommender):
         return indices, coo.data, coo.shape
 
     def initModel(self):
-        super(SEPT, self).initModel()
+        super(SEPT_bak, self).initModel()
         self.neg_idx = tf.placeholder(tf.int32, name="neg_holder")
         self._create_variable()
         self.bs_matrix = self.get_birectional_social_matrix()

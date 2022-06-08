@@ -763,17 +763,17 @@ class SEPTV2_douban_kl(SocialRecommender, GraphRecommender):
         self.batch_pos_item_emb = tf.nn.embedding_lookup(self.rec_item_embeddings, self.v_idx)
         self.batch_neg_item_emb = tf.nn.embedding_lookup(self.rec_item_embeddings, self.neg_idx)
 
-        if self.ppr_rate != 0.0:
-            if self.ppr_flag == 1:
-                # add social-based ppr mat
-                social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat()
-            else:
-                # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type='hk', weight=0.7)
-                social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type_enc='origin')
-            # social_mat = self._convert_sp_mat_to_sp_tensor(social_ppr_mat)
-            # social_mat = tf.sparse.to_dense(social_mat)
-            self.social_ppr_mat = tf.convert_to_tensor(social_ppr_mat, dtype=tf.float32) #(userNum, userNum)
-            self.user_user_sim = tf.matmul(self.rec_user_embeddings, tf.transpose(self.rec_user_embeddings, perm=[1, 0])) #(userNum, userNum)
+        # if self.ppr_rate != 0.0:
+        if self.ppr_flag == 1:
+            # add social-based ppr mat
+            social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat()
+        else:
+            # social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type='hk', weight=0.7)
+            social_ppr_mat, social_ppr_sp_mat = self.cal_ppr_social_mat(type_enc='origin')
+        # social_mat = self._convert_sp_mat_to_sp_tensor(social_ppr_mat)
+        # social_mat = tf.sparse.to_dense(social_mat)
+        self.social_ppr_mat = tf.convert_to_tensor(social_ppr_mat, dtype=tf.float32) #(userNum, userNum)
+        self.user_user_sim = tf.matmul(self.rec_user_embeddings, tf.transpose(self.rec_user_embeddings, perm=[1, 0])) #(userNum, userNum)
         # pdb.set_trace()
 
         if self.s_cl_rate != 0.0:
@@ -856,7 +856,10 @@ class SEPTV2_douban_kl(SocialRecommender, GraphRecommender):
 
         if self.kl_w != 0.0:
             self.social_ppr_cluster_emb = self.sampleTopkUsersKeepOri(self.rec_user_embeddings, top_k=10, social_ppr_mat=social_ppr_mat, mask_ori=True, add_norm=True, add_self=True, social_layer_num=2)
+
+            self.social_ppr_cluster_global_emb = tf.matmul(self.social_ppr_mat, self.rec_user_embeddings)
             self.batch_user_kl_emb = tf.nn.embedding_lookup(self.social_ppr_cluster_emb, self.u_idx) #(bs, dim)
+            self.batch_user_kl_global_emb = tf.nn.embedding_lookup(self.social_ppr_cluster_global_emb, self.u_idx) #(bs, dim)
       
     def ssl_layer_loss(self, userEmb, userEmbAug, ssl_temp=0.1):
         """
@@ -1069,17 +1072,21 @@ class SEPTV2_douban_kl(SocialRecommender, GraphRecommender):
             kl_score = tf.matmul(self.batch_user_kl_emb, tf.transpose(self.rec_item_embeddings, perm=[1,0]))#(bs, item_num)
             ori_score = tf.matmul(self.batch_user_emb, tf.transpose(self.rec_item_embeddings, perm=[1,0]))#(bs, item_num)
 
+            kl_global_score = tf.matmul(self.batch_user_kl_global_emb, tf.transpose(self.rec_item_embeddings, perm=[1,0]))#(bs, item_num)
+
             # normalize
             epsilon = 1e-7
             kl_score = tf.nn.softmax(kl_score)
+            kl_global_score = tf.nn.softmax(kl_global_score)
             ori_score = tf.nn.softmax(ori_score)
             # kl_score/= (tf.reduce_sum(kl_score, axis=1, keep_dims=True) + epsilon)
             # ori_score/= (tf.reduce_sum(ori_score, axis=1, keep_dims=True) + epsilon)
 
             kl_loss = tf.keras.losses.KLDivergence()
             self.kl_loss = kl_loss(ori_score, kl_score)
+            self.kl_global_loss = kl_loss(ori_score, kl_global_score)
 
-            loss += self.kl_w * self.kl_loss
+            loss += self.kl_w * (self.kl_loss + self.kl_global_loss)
         # pdb.set_trace()
         v1_opt = tf.train.AdamOptimizer(self.lRate)
         v1_op = v1_opt.minimize(rec_loss)
