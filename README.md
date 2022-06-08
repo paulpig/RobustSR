@@ -2,7 +2,7 @@
 
 ## Reproducibility
 
-- LastFM
+### LastFM
 1. Run 
 ```python
   python main.py
@@ -11,7 +11,7 @@
 ```python
   JI_DCL_lastfm
 ```
-- Douban-Book
+### Douban-Book
 1. Run 
 ```python
   python main.py
@@ -20,7 +20,7 @@
 ```python
   JI_DCL_Douban_book
 ```
-- TrustFilm
+### TrustFilm
 1. Run 
 ```python
   python main.py
@@ -29,7 +29,7 @@
 ```python
   JI_DCL_TrustFilm
 ```
-- Yelp
+### Yelp
 1. Run 
 ```python
   python main.py
