@@ -1,7 +1,7 @@
 # JI-DCL
 
 ## Reproducibility
-
+Please follow steps below to reproduce the results of JI-DCL reported in our paper on the four datasets.
 ### LastFM
 1. Run 
 ```python
