@@ -24,13 +24,13 @@ from sklearn.preprocessing import normalize
 #model_name = 'add_inter_social_rep'
 #model_name = 'only_cl'
 #model_name = 'diffNet'
-#model_name = 'LightGCN'
+model_name = 'LightGCN'
 #model_name = 'LightGCN_v1'
 #model_name = 'diffNet_v3'
 #model_name = 'diffNet_v2'
 #model_name = 'diffNet_v5'
 #model_name = 'diffNet_v5_true'
-model_name = 'ESRF'
+#model_name = 'ESRF'
 #model_name = 'MHCN'
 #model_name = 'SEPT'
 #model_name = 'SEPT_v1'
@@ -40,6 +40,7 @@ model_name = 'ESRF'
 #model_name = 'SCIL_v3'
 #model_name = 'DANSER'
 #model_name = 'fuse'
+#model_name = 'SERec'
 print(model_name)
 
 user_emb = np.load('./{}/user_emb.npy'.format(model_name))
@@ -48,8 +49,8 @@ item_emb = np.load('./{}/item_emb.npy'.format(model_name))
 #item_emb = (item_emb - np.mean(item_emb, 0) / np.linalg.norm(np.mean(item_emb, 0)))
 #user_emb = (user_emb - np.mean(user_emb, 0)) / np.std(user_emb, 0)
 #user_emb = (user_emb) / np.linalg.norm(np.mean(user_emb, 0))
-user_emb = (user_emb) / np.reshape(np.linalg.norm(user_emb, axis=1), (-1, 1))
-item_emb = (item_emb) / np.reshape(np.linalg.norm(item_emb, axis=1), (-1, 1))
+#user_emb = (user_emb) / np.reshape(np.linalg.norm(user_emb, axis=1), (-1, 1))
+#item_emb = (item_emb) / np.reshape(np.linalg.norm(item_emb, axis=1), (-1, 1))
 #pdb.set_trace()
 #user_emb = (user_emb) / np.mean(user_emb, 0)
 #user_emb = user_emb - np.mean(user_emb, 0)
@@ -228,9 +229,9 @@ print("UI-align score: ", np.mean(sim_total))
 
 #perplexity = 30
 #perplexity = 80
-perplexity = 60
+#perplexity = 80
 #perplexity = 50
-#perplexity = 60 # best
+perplexity = 60 # best
 
 n_components = 2
 #tsne = manifold.TSNE(
@@ -255,7 +256,7 @@ n_components = 2
 tsne = manifold.TSNE(
     n_components=n_components,
     init="random",
-    random_state=6,
+    random_state=0,
     perplexity=perplexity,
     learning_rate="auto",
     n_iter=600,
@@ -345,17 +346,22 @@ sns.kdeplot(data=user_emb_2d, bw=0.05, shade=True, cmap=cmap, legend=True, **kwa
 
 
 my_x_ticks = np.arange(-1, 1.2, 1)
-plt.xticks(my_x_ticks, fontsize=10)
+#plt.xticks(my_x_ticks, fontsize=15)
+plt.xticks(my_x_ticks, fontsize=20)
+my_y_ticks = np.arange(-1, 1.2, 1)
+plt.yticks(my_y_ticks, fontsize=20)
 axs.spines['bottom'].set_linewidth(2.2);###设置底部坐标轴的粗细
 axs.spines['left'].set_linewidth(2.2);####设置左边坐标轴的粗细
 axs.spines['right'].set_linewidth(2.2);###设置右边坐标轴的粗细
 axs.spines['top'].set_linewidth(2.2);####设置上部坐标轴的粗细
+axs.set_xlabel("Features", fontsize=20)
+axs.set_ylabel("Features", fontsize=20, labelpad=-5.5)
 
 #plt.tick_params(width=20, labelsize=4)
 #plt.title(model_name,fontdict={'size':14}, fontweight="bold", fontname="Times New Roman")
 
 plt.savefig('./result/{}_final_v2.pdf'.format(model_name))
-#plt.show()
+plt.show()
 
 exit(0)
 

@@ -4,6 +4,7 @@ import numpy as np
 from numpy import linalg as LA
 from joblib import Parallel, delayed
 from math import sqrt
+import pickle
 EPS = 1e-8
 # this model refers to the following paper:
 # #########----  Collaborative Filtering with Social Exposure: A Modular Approach to Social Recommendation   ----#############
@@ -52,6 +53,17 @@ class SERec(SocialRecommender):
     def trainModel(self):
         print('training...')
         self._update(self.X)
+
+        # save 
+        model_name = "SERec"
+        # model_name = "ppr_v2"
+        # model_name = "0_1_score"
+        np.save('./exp/lastfm/{}/user_emb'.format(model_name), self.theta)
+        np.save('./exp/lastfm/{}/item_emb'.format(model_name), self.self.beta)
+        with open('./exp/lastfm/{}/id2user.pickle'.format(model_name), 'wb') as handle:
+            pickle.dump(self.data.id2user, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        with open('./exp/lastfm/{}/id2item.pickle'.format(model_name), 'wb') as handle:
+            pickle.dump(self.data.id2item, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     def _update(self, X):
         '''Model training and evaluation on validation set'''
