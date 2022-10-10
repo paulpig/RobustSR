@@ -36,7 +36,7 @@ def auto_text(rects):
 # fig, ax_list = plt.subplots(ncols=2, nrows=2, figsize=(10,5),dpi=100)
 #fig, ax_list = plt.subplots(ncols=4, nrows=1, figsize=(16,4),dpi=100)
 #fig, ax_list = plt.subplots(ncols=2, nrows=1, figsize=(10,4))
-fig, ax_list = plt.subplots(ncols=1, nrows=1, figsize=(5,4))
+fig, ax_list = plt.subplots(ncols=1, nrows=1, figsize=(6,5))
 #plt.subplots_adjust(wspace =0.25, hspace =0.5)
 plt.subplots_adjust(wspace =0.4, hspace =0.0)
 # fig, ax = plt.subplots(figsize=(7,5),dpi=100)
@@ -44,7 +44,8 @@ plt.subplots_adjust(wspace =0.4, hspace =0.0)
 
 # plt.subplots_adjust(wspace =0.25, hspace =0)
 
-tmp_index = 0
+# tmp_index = 1 # lastfm
+tmp_index = 0 # douban-book
 #for index, ax in enumerate(ax_list):
 if ax_list is not None:
     ax = ax_list
@@ -195,9 +196,9 @@ if ax_list is not None:
     #ax.set_zorder(3)
 
 
-    ax.bar(np.asarray(x_pos) - width, y1, width=width, color='#9BA3EB', label='SIL-NONE', zorder=4)
-    ax.bar(np.asarray(x_pos), y2, width=width, color='#646FD4', label='SIL-S', zorder=4)
-    ax.bar(np.asarray(x_pos) + width, y3, width=width, color='#242F9B', label='SIL-Q', zorder=4)
+    ax.bar(np.asarray(x_pos) - width, y1, width=width, color='#9BA3EB', label='w/o SocialReg', zorder=4, alpha=0.7, edgecolor='black')
+    ax.bar(np.asarray(x_pos), y2, width=width, color='#646FD4', label='SocialReg-S', zorder=4, alpha=0.7, edgecolor='black')
+    ax.bar(np.asarray(x_pos) + width, y3, width=width, color='#242F9B', label='SocialReg-Q', zorder=4, alpha=0.7, edgecolor='black')
     #ax.bar(np.asarray(x_pos)+width/2, y3, width=width, color='#646FD4', label='PPR-KL', zorder=4)
     #ax.bar(np.asarray(x_pos)+width/2*3, y4, width=width, color='#242F9B', label='PPR-CL', zorder=4)
 
@@ -205,7 +206,7 @@ if ax_list is not None:
     # plt.legend(prop={'family': 'Times New Roman', 'size': 20})
     # if index == 0:
     #if tmp_index ==0:
-    ax.legend(prop={'family': 'Times New Roman', 'size': 10}, loc = 'upper left')
+    ax.legend(prop={'family': 'Times New Roman', 'size': 20}, loc = 'upper left')
 
     # title 字体风格的大小设置
     # plt.title('Comparison', fontdict={'family': 'Times New Roman', 'size': 20})
@@ -217,7 +218,7 @@ if ax_list is not None:
     #ax.set_xlabel(dataset, fontdict={'family': 'Times New Roman', 'size': 15}, labelpad=2.0)
     #ax.set_xlabel(dataset, fontdict={'family': 'Times New Roman', 'size': 15}, labelpad=5.0)
 
-    ax.set_ylabel(metrics, fontdict={'family': 'Times New Roman', 'size': 14})
+    ax.set_ylabel(metrics, fontdict={'family': 'Times New Roman', 'size': 24})
     #ax.set_ylabel(metrics)
 
     # 设置y轴刻度间距
@@ -237,12 +238,14 @@ if ax_list is not None:
 
     # 设置x轴的显示
     ax.set_xticks(x_pos)
+    # plt.xticks(fontsize=14, rotation=90)
     # ax.set_xticklabels(['x1', 'x2', 'x3', 'x4', 'x5'])
 #         ax.set_xticklabels(['DisMult', 'TransR(IA)', 'TransR(CB)',  'CbiaSR'])
     ax.set_xticklabels(x)
     #ax.set_xticklabels(x)
     # 设置刻度的字体大小
-    ax.tick_params(labelsize=13)
+    ax.tick_params(labelsize=20)
+    # ax.tick_params(labelsize=10)
     # 设置x/y轴的字体风格
     labels = ax.get_xticklabels() + ax.get_yticklabels()
     [label.set_fontname('Times New Roman') for label in labels]
@@ -277,7 +280,7 @@ if ax_list is not None:
     tmp_index += 1
 # %matplotlib inline
 plt.savefig('douban_book_variant.pdf')
-#plt.savefig('LastFM_variant.pdf')
+# plt.savefig('LastFM_variant.pdf')
 #plt.grid(which='major', axis='y', zorder=-5.0)
 plt.show()
 

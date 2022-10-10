@@ -1328,15 +1328,16 @@ class SEPTV2_yelp_add_other_sl_v2_ab(SocialRecommender, GraphRecommender):
         # self.data.id2user, self.data.id2item: dict
         # self.U, self.V: numpy
         # save
-        # model_name = "SCIL_v3"
-        # # model_name = "ppr_v2"
-        # # model_name = "0_1_score"
-        # np.save('./exp/lastfm/{}/user_emb'.format(model_name), self.U)
-        # np.save('./exp/lastfm/{}/item_emb'.format(model_name), self.V)
-        # with open('./exp/lastfm/{}/id2user.pickle'.format(model_name), 'wb') as handle:
-        #     pickle.dump(self.data.id2user, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        # with open('./exp/lastfm/{}/id2item.pickle'.format(model_name), 'wb') as handle:
-        #     pickle.dump(self.data.id2item, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        # model_name = "only_cl_v2"
+        model_name = "ppr_v2"
+        # model_name = "LightGCN_v1"
+        # model_name = 'SCIL_v3'
+        np.save('./exp/douban_book/{}/user_emb'.format(model_name), self.U)
+        np.save('./exp/douban_book/{}/item_emb'.format(model_name), self.V)
+        with open('./exp/douban_book/{}/id2user.pickle'.format(model_name), 'wb') as handle:
+            pickle.dump(self.data.id2user, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        with open('./exp/douban_book/{}/id2item.pickle'.format(model_name), 'wb') as handle:
+            pickle.dump(self.data.id2item, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     def saveModel(self):
         self.bestU, self.bestV = self.sess.run([self.rec_user_embeddings, self.rec_item_embeddings])

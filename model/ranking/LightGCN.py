@@ -60,13 +60,14 @@ class LightGCN(GraphRecommender):
             self.U, self.V = self.sess.run([self.multi_user_embeddings, self.multi_item_embeddings])
             self.ranking_performance(epoch)
         self.U,self.V = self.bestU,self.bestV
-        # exp = 'LightGCN_v1'
-        # np.save('./exp/lastfm/{}/user_emb'.format(exp), self.U)
-        # np.save('./exp/lastfm/{}/item_emb'.format(exp), self.V)
-        # with open('./exp/lastfm/{}/id2user.pickle'.format(exp), 'wb') as handle:
-        #     pickle.dump(self.data.id2user, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        # with open('./exp/lastfm/{}/id2item.pickle'.format(exp), 'wb') as handle:
-        #     pickle.dump(self.data.id2item, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        exp = 'LightGCN_v1'
+        np.save('./exp/douban_book/{}/user_emb'.format(exp), self.U)
+        np.save('./exp/douban_book/{}/item_emb'.format(exp), self.V)
+        with open('./exp/douban_book/{}/id2user.pickle'.format(exp), 'wb') as handle:
+            pickle.dump(self.data.id2user, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        with open('./exp/douban_book/{}/id2item.pickle'.format(exp), 'wb') as handle:
+            pickle.dump(self.data.id2item, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
     def saveModel(self):
         self.bestU, self.bestV = self.sess.run([self.multi_user_embeddings, self.multi_item_embeddings])

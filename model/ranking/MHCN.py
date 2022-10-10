@@ -232,12 +232,13 @@ class MHCN(SocialRecommender,GraphRecommender):
         self.U,self.V = self.bestU,self.bestV
 
         # model_name = "MHCN"
-        # np.save('./exp/lastfm/{}/user_emb'.format(model_name), self.U)
-        # np.save('./exp/lastfm/{}/item_emb'.format(model_name), self.V)
-        # with open('./exp/lastfm/{}/id2user.pickle'.format(model_name), 'wb') as handle:
-        #     pickle.dump(self.data.id2user, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        # with open('./exp/lastfm/{}/id2item.pickle'.format(model_name), 'wb') as handle:
-        #     pickle.dump(self.data.id2item, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        model_name = "MHCN_rm_self"
+        np.save('./exp/lastfm/{}/user_emb'.format(model_name), self.U)
+        np.save('./exp/lastfm/{}/item_emb'.format(model_name), self.V)
+        with open('./exp/lastfm/{}/id2user.pickle'.format(model_name), 'wb') as handle:
+            pickle.dump(self.data.id2user, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        with open('./exp/lastfm/{}/id2item.pickle'.format(model_name), 'wb') as handle:
+            pickle.dump(self.data.id2item, handle, protocol=pickle.HIGHEST_PROTOCOL)
         
         # print("path:  " + './exp/lastfm/{}/user_emb'.format(model_name))
 

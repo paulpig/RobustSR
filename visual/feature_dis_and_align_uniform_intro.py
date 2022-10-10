@@ -360,8 +360,8 @@ axs.spines['top'].set_linewidth(2.2);####设置上部坐标轴的粗细
 #plt.tick_params(width=20, labelsize=4)
 #plt.title(model_name,fontdict={'size':14}, fontweight="bold", fontname="Times New Roman")
 
-plt.savefig('./result/{}_final_v2.pdf'.format(model_name))
-#plt.show()
+# plt.savefig('./result/{}_final_v2.pdf'.format(model_name))
+plt.show()
 
 exit(0)
 

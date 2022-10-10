@@ -90,11 +90,11 @@ class DiffNet_visual(SocialRecommender,GraphRecommender):
         for k in range(self.n_layers):
             new_user_embeddings = tf.sparse_tensor_dense_matmul(self.S,user_embeddings)
             user_embeddings = tf.matmul(tf.concat([new_user_embeddings,user_embeddings],1),self.weights['weights%d' % k])
-            # user_embeddings = tf.nn.relu(user_embeddings)
-            user_embeddings = tf.math.l2_normalize(user_embeddings,axis=1)
+            user_embeddings = tf.nn.relu(user_embeddings)
+            # user_embeddings = tf.math.l2_normalize(user_embeddings,axis=1)
 
-        # final_user_embeddings = user_embeddings+tf.sparse_tensor_dense_matmul(self.A,self.item_embeddings)
-        final_user_embeddings = user_embeddings + tf.math.l2_normalize(tf.sparse_tensor_dense_matmul(self.A, self.item_embeddings))
+        final_user_embeddings = user_embeddings + tf.sparse_tensor_dense_matmul(self.A,self.item_embeddings)
+        # final_user_embeddings = user_embeddings + tf.math.l2_normalize(tf.sparse_tensor_dense_matmul(self.A, self.item_embeddings))
 
         self.neg_idx = tf.placeholder(tf.int32, name="neg_holder")
         self.neg_item_embedding = tf.nn.embedding_lookup(self.item_embeddings, self.neg_idx)

@@ -11,6 +11,7 @@ from util import config
 from util.loss import bpr_loss
 import random
 import pdb
+import pickle
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 #Suggested Maxium epoch LastFM: 120, Douban-Book: 30, Yelp: 30.
@@ -1125,6 +1126,17 @@ class SEPTV2_douban_book(SocialRecommender, GraphRecommender):
             # if epoch % 20 == 0 or epoch == (self.maxEpoch - 1):
             self.ranking_performance(epoch) #model performance;
         self.U,self.V = self.bestU,self.bestV
+
+        model_name = "only_cl_v2"
+        # model_name = "ppr_v2"
+        # model_name = "LightGCN_v1"
+        # model_name = 'SCIL_v3'
+        np.save('./exp/douban_book/{}/user_emb'.format(model_name), self.U)
+        np.save('./exp/douban_book/{}/item_emb'.format(model_name), self.V)
+        with open('./exp/douban_book/{}/id2user.pickle'.format(model_name), 'wb') as handle:
+            pickle.dump(self.data.id2user, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        with open('./exp/douban_book/{}/id2item.pickle'.format(model_name), 'wb') as handle:
+            pickle.dump(self.data.id2item, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     def saveModel(self):
         self.bestU, self.bestV = self.sess.run([self.rec_user_embeddings, self.rec_item_embeddings])

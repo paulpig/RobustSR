@@ -12,54 +12,68 @@ import random
 import matplotlib as mpl
 from scipy.spatial.distance import cdist
 from sklearn.preprocessing import normalize
+from sklearn import preprocessing
 #import pickle5 as pickle
 
 
 
 
-#model_name = 'only_ppr'
-#model_name = 'ppr_v2'
-#model_name = '0_1_score' # wrong
+# model_name = 'only_ppr'
+# model_name = 'ppr_v2' # true
+# model_name = '0_1_score' # wrong
 #model_name = 'only_output_subgraph'
 #model_name = 'add_inter_social_rep'
-#model_name = 'only_cl'
-#model_name = 'diffNet'
-model_name = 'LightGCN'
-#model_name = 'LightGCN_v1'
-#model_name = 'diffNet_v3'
-#model_name = 'diffNet_v2'
-#model_name = 'diffNet_v5'
-#model_name = 'diffNet_v5_true'
-#model_name = 'ESRF'
-#model_name = 'MHCN'
-#model_name = 'SEPT'
-#model_name = 'SEPT_v1'
+# model_name = 'only_cl' # wrong;
+# model_name = 'diffNet'
+# model_name = 'LightGCN'
+# model_name = 'LightGCN_v1'
+# model_name = 'diffNet_v3'
+# model_name = 'diffNet_v2'
+# model_name = 'diffNet_v5'
+# model_name = 'diffNet_v5_true'
+# model_name = 'ESRF'
+# model_name = 'MHCN'
+# model_name = 'MHCN_rm_self'
+# model_name = 'MHCN_v2'
+# model_name = 'SEPT'
+# model_name = 'SEPT_v1'
 #model_name = 'SCIL_v1'
 #model_name = 'SCIL'
 #model_name = 'SCIL_v2'
-#model_name = 'SCIL_v3'
+model_name = 'SCIL_v3'
 #model_name = 'DANSER'
 #model_name = 'fuse'
 #model_name = 'SERec'
+
+
+# model_name = 'douban_book/only_cl_v2' # right;
+# model_name = 'douban_book/ppr_v2' # right;
+# model_name = 'douban_book/LightGCN_v1' # right;
+# model_name = 'douban_book/SCIL_v3' # right;
+
+
 print(model_name)
 
 user_emb = np.load('./{}/user_emb.npy'.format(model_name))
 item_emb = np.load('./{}/item_emb.npy'.format(model_name))
-#user_emb = (user_emb - np.mean(user_emb, 0)) / np.linalg.norm(np.mean(user_emb, 0))
-#item_emb = (item_emb - np.mean(item_emb, 0) / np.linalg.norm(np.mean(item_emb, 0)))
-#user_emb = (user_emb - np.mean(user_emb, 0)) / np.std(user_emb, 0)
-#user_emb = (user_emb) / np.linalg.norm(np.mean(user_emb, 0))
-#user_emb = (user_emb) / np.reshape(np.linalg.norm(user_emb, axis=1), (-1, 1))
-#item_emb = (item_emb) / np.reshape(np.linalg.norm(item_emb, axis=1), (-1, 1))
-#pdb.set_trace()
-#user_emb = (user_emb) / np.mean(user_emb, 0)
-#user_emb = user_emb - np.mean(user_emb, 0)
-#item_emb = item_emb - np.mean(item_emb, 0)
+
+# user_emb = preprocessing.normalize(user_emb, norm='l2')
+# item_emb = preprocessing.normalize(item_emb, norm='l2')
+
+# min_max_scaler = preprocessing.MinMaxScaler()
+# user_emb = min_max_scaler.fit_transform(user_emb)
+# item_emb = min_max_scaler.fit_transform(item_emb)
+
+# pdb.set_trace()
+# user_emb = (user_emb) / np.reshape(np.linalg.norm(user_emb, axis=1), (-1, 1))
+# item_emb = (item_emb) / np.reshape(np.linalg.norm(item_emb, axis=1), (-1, 1))
+
 
 from sklearn.preprocessing import normalize
 import seaborn as sns
 #fig, axs = plt.subplots(2,2)
-fig, axs = plt.subplots(1,1, figsize=(5,5))
+# fig, axs = plt.subplots(1,1, figsize=(5,5))
+fig, axs = plt.subplots(2,1, figsize=(8,8))
 #plt.title(model_name)
 #pdb.set_trace()
 
@@ -174,6 +188,7 @@ def calculate_distance(user_id_str):
     centor_user_dis = [np.power(np.linalg.norm(center_user_emb - np.mean(neighbor_users, 0), axis=0), 2)]
     return centor_user_dis
 
+
 def calculate_distance_for_items(user_id_str):
     user_id = user_id_str
     center_user_emb = user_emb[user_id]
@@ -227,6 +242,7 @@ for index in range(len(user_emb)):
 print("UI-align score: ", np.mean(sim_total))
 
 
+# exit(0)
 #perplexity = 30
 #perplexity = 80
 #perplexity = 80
@@ -234,24 +250,28 @@ print("UI-align score: ", np.mean(sim_total))
 perplexity = 60 # best
 
 n_components = 2
-#tsne = manifold.TSNE(
+# tsne = manifold.TSNE(
 #    n_components=n_components,
 #    init="random",
-#    random_state=0,
+#    random_state=4,
 #    perplexity=perplexity,
 #    learning_rate="auto",
-#    n_iter=500,
-#)
+#    n_iter=700,
+# )
 
 # good results
-#tsne = manifold.TSNE(
+# tsne = manifold.TSNE(
 #    n_components=n_components,
 #    init="random",
 #    random_state=8,
 #    perplexity=perplexity,
 #    learning_rate="auto",
 #    n_iter=500,
-#)
+# )
+
+#PCA
+# pca = PCA(n_components=2)
+# user_emb_2d = pca.fit_transform(user_emb)
 
 tsne = manifold.TSNE(
     n_components=n_components,
@@ -263,38 +283,44 @@ tsne = manifold.TSNE(
 )
 
 
+
+# plt.scatter(user_emb_2d[:,0], user_emb_2d[:,1])
+# plt.show()
+# exit(0)
+
 #results_v2 = tsne.fit_transform(item_emb)
 # concat 2-hop embs
 #user_double = np.concatenate([user_emb, sim_total], axis=0)
 #user_emb_2d = tsne.fit_transform(user_double)
 #user_emb_2d = tsne.fit_transform(item_emb)
+# t-sne
 user_emb_2d = tsne.fit_transform(user_emb)
 
 #print(user_emb_2d.shape)
 #print(user_emb_2d[:10])
 user_emb_2d = normalize(user_emb_2d, axis=1,norm='l2')
-#user_emb_ori = user_emb_2d[:len(user_emb_2d)//2, :]
-#user_emb_hop = user_emb_2d[len(user_emb_2d)//2:, :]
-
-#user_emb_ori = tsne.fit_transform(user_emb)
-#user_emb_hop = tsne.fit_transform(np.array(sim_total))
-#user_emb_ori = normalize(user_emb_ori, axis=1,norm='l2')
-#user_emb_hop = normalize(user_emb_hop, axis=1,norm='l2')
 
 
 #cmap = plt.cm.jet  # define the colormap
 #cmap = plt.cm.get_cmap('GnBu', 10)
 #cmap = plt.cm.get_cmap('GnBu', 8)
 #cmap = plt.cm.get_cmap('BrBG', 8)
-cmap = plt.cm.get_cmap('BuPu', 15)
-
+cmap = plt.cm.get_cmap('BuPu', 20)
+# cmap = plt.cm.get_cmap('BuPu', 10)
+# cmap = plt.cm.get_cmap('BuPu', 25)
+print(cmap.N)
 # extract all colors from the .jet map
 cmaplist = [cmap(i) for i in range(cmap.N)]
 # force the first color entry to be grey
+
+cmaplist = cmaplist[-15:]
 cmaplist[0] = (1., 1., 1., 1.0)
 # create the new map
+# cmap = mpl.colors.LinearSegmentedColormap.from_list(
+#     'Custom cmap', cmaplist, cmap.N)
+
 cmap = mpl.colors.LinearSegmentedColormap.from_list(
-    'Custom cmap', cmaplist, cmap.N)
+    'Custom cmap', cmaplist, len(cmaplist))
 # define the bins and normalize
 #bounds = np.linspace(0, 20, 21)
 #norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
@@ -304,7 +330,7 @@ cmap = mpl.colors.LinearSegmentedColormap.from_list(
 #sns.set(rc={'axes.facecolor':'cornflowerblue', 'figure.facecolor':'cornflowerblue'})
 kwargs = {'levels': np.arange(0, 4.2, 0.5)}
 
-sns.kdeplot(data=user_emb_2d, bw=0.05, shade=True, cmap=cmap, legend=True, **kwargs)
+sns.kdeplot(data=user_emb_2d, bw=0.05, shade=True, cmap=cmap, ax=axs[0], legend=True, **kwargs)
 #sns.kdeplot(data=user_emb_2d, bw=0.05, shade=True, cmap=cmap, norm=norm, legend=True, **kwargs)
 #sns.kdeplot(data=user_emb_2d, bw=0.05, shade=True, cmap="GnBu", legend=True, **kwargs)
 #sns.kdeplot(data=user_emb_ori, bw=0.05, shade=True, cmap="GnBu", ax=axs[0][0], legend=True, **kwargs)
@@ -334,28 +360,28 @@ sns.kdeplot(data=user_emb_2d, bw=0.05, shade=True, cmap=cmap, legend=True, **kwa
 
 #sns.kdeplot(data=user_emb_2d, bw=0.05, shade=True, cmap='GnBu', ax=axs[0], legend=True, **kwargs)
 #plt.set_title('SimGCL', fontsize = 9,fontweight="bold")
-#x = [p[0] for p in user_emb_2d]
-#y = [p[1] for p in user_emb_2d]
-#angles = np.arctan2(y,x)
-#sns.kdeplot(data=angles, bw=0.15, shade=True,legend=True,ax=axs[1][4],color='green')
-#sns.kdeplot(data=angles, bw=0.15, shade=True,legend=True,color='green')
+x = [p[0] for p in user_emb_2d]
+y = [p[1] for p in user_emb_2d]
+angles = np.arctan2(y,x)
+# sns.kdeplot(data=angles, bw=0.15, shade=True,legend=True,ax=axs[1][4],color='green')
+sns.kdeplot(data=angles, bw=0.15, shade=True,legend=True, ax=axs[1], color='blue')
 #plt.show()
 #plt.savefig('{}_user_emb_rel_item.png'.format(model_name))
 #plt.rcParams['axes.facecolor']='snow'
 #axs.set_facecolor("orange")
 
 
-my_x_ticks = np.arange(-1, 1.2, 1)
-#plt.xticks(my_x_ticks, fontsize=15)
-plt.xticks(my_x_ticks, fontsize=20)
-my_y_ticks = np.arange(-1, 1.2, 1)
-plt.yticks(my_y_ticks, fontsize=20)
-axs.spines['bottom'].set_linewidth(2.2);###设置底部坐标轴的粗细
-axs.spines['left'].set_linewidth(2.2);####设置左边坐标轴的粗细
-axs.spines['right'].set_linewidth(2.2);###设置右边坐标轴的粗细
-axs.spines['top'].set_linewidth(2.2);####设置上部坐标轴的粗细
-axs.set_xlabel("Features", fontsize=20)
-axs.set_ylabel("Features", fontsize=20, labelpad=-5.5)
+# my_x_ticks = np.arange(-1, 1.2, 1)
+# plt.xticks(my_x_ticks, fontproperties = 'Times New Roman', size=23)
+# my_y_ticks = np.arange(-1, 1.2, 1)
+# plt.yticks(my_y_ticks, fontproperties = 'Times New Roman', size=23)
+
+# axs.spines['bottom'].set_linewidth(2.2);###设置底部坐标轴的粗细
+# axs.spines['left'].set_linewidth(2.2);####设置左边坐标轴的粗细
+# axs.spines['right'].set_linewidth(2.2);###设置右边坐标轴的粗细
+# axs.spines['top'].set_linewidth(2.2);####设置上部坐标轴的粗细
+# axs.set_xlabel("Features", fontsize=30, fontdict={'family': 'Times New Roman'})
+# axs.set_ylabel("Features", fontsize=30, fontdict={'family': 'Times New Roman'}, labelpad=-5.5)
 
 #plt.tick_params(width=20, labelsize=4)
 #plt.title(model_name,fontdict={'size':14}, fontweight="bold", fontname="Times New Roman")

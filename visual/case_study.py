@@ -9,28 +9,32 @@ from sklearn import manifold, datasets
 
 plt.rcParams['figure.figsize'] = (7,6)
 
-#model_name = 'only_ppr'
-#model_name = '0_1_score' # wrong
-#model_name = 'LightGCN'
+# model_name = 'only_ppr'
+# model_name = 'ppr_v2' # right;
+# model_name = '0_1_score' # wrong
+# model_name = 'LightGCN'
+# model_name = 'LightGCN_v1'
 #model_name = 'only_output_subgraph'
 #model_name = 'add_inter_social_rep'
 #model_name = 'mean_inter_social_rep'
 #model_name = 'add_inter_social_rep'
 #model_name = 'mlp_inter_social_rep'
-model_name = 'only_cl'
+# model_name = 'only_cl' # 
 #model_name = 'danser_v2'
 #model_name = 'diffNet'
 #model_name = 'diffNet_v2'
 #model_name = 'only_output_subgraph' # 1.8492
 #model_name = 'MHCN'
 #model_name = 'ESRF'
-#model_name = 'SEPT'
-#model_name = 'SCIL_v3'
-#model_name = 'SCIL_v1'
-#model_name = 'SCIL_v2'
-#model_name = 'SCIL'
+# model_name = 'SEPT'
+# model_name = 'SCIL_v3'
+# model_name = 'SCIL_v1'
+# model_name = 'SCIL_v2'
+# model_name = 'SCIL'
 #model_name = 'SEPT_v1'
-case_id = [505, 380]
+# case_id = [505, 380] # current nodes;
+# case_id = [509, 384, 200]
+case_id = [891, 543]
 #case_id = [508, 470]
 
 user_emb = np.load('./{}/user_emb.npy'.format(model_name))
