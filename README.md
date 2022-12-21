@@ -1,7 +1,7 @@
 # RobustSR
 
 ## Reproducibility
-Please follow steps below to reproduce the results of JI-DCL reported in our paper on the four datasets.
+Please follow steps below to reproduce the results of RobustSR reported in our paper on the four datasets.
 ### LastFM
 ```python
   # First run this code.
